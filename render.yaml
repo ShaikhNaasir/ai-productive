@@ -80,7 +80,7 @@ services:
         fromService:
           type: web
           name: productivity-api
-          property: host
+          envVarKey: RENDER_EXTERNAL_URL
     routes:
       - type: rewrite
         source: /*
