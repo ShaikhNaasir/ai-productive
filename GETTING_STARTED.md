@@ -20,7 +20,7 @@ Three services:
 - A **PostgreSQL** database with the **pgvector** extension. Pick one:
   - **Supabase** (cloud, free) — pgvector is built in, or
   - **Docker** — `docker compose up` brings up a bundled `pgvector/pgvector` Postgres (see §5), or
-  - a **local Postgres** with `CREATE EXTENSION vector`.
+  - a **local Postgres** — see §2b for step-by-step (with or without pgvector).
 - *(optional)* **Anthropic API key** — for AI features
 - *(optional)* **Voyage AI key** — for semantic (meaning-based) search
 
@@ -53,6 +53,77 @@ npm --prefix server run db:push      # fast: pushes the schema directly (best fo
 # or, to use versioned migrations:
 npm --prefix server run prisma:migrate   # creates prisma/migrations and applies them
 ```
+
+---
+
+## 2b. Local PostgreSQL (no Supabase, no Docker)
+
+Install Postgres on your machine and point the app at it.
+
+### Install (Windows)
+
+1. Download the installer from <https://www.postgresql.org/download/windows/> (EDB, PostgreSQL 16).
+2. Run it. Set a password for the `postgres` superuser and keep port **5432**. (pgAdmin is included and optional.)
+3. Open **SQL Shell (psql)** from the Start menu (or `"C:\Program Files\PostgreSQL\16\bin\psql" -U postgres`) and create the database:
+
+   ```sql
+   CREATE DATABASE productivity;
+   ```
+
+4. Set the connection strings in `server/.env` (replace `YOURPASS`):
+
+   ```
+   DATABASE_URL="postgresql://postgres:YOURPASS@localhost:5432/productivity"
+   DIRECT_URL="postgresql://postgres:YOURPASS@localhost:5432/productivity"
+   ```
+
+> macOS: `brew install postgresql@16 && brew services start postgresql@16`.
+> Linux: `sudo apt install postgresql` then `sudo -u postgres createdb productivity`.
+
+### The pgvector requirement — two options
+
+The Prisma schema declares vector columns (for semantic search), so a **plain** Postgres will reject `db push` until pgvector exists. Choose one:
+
+**Option A — Install pgvector (keeps semantic search available).**
+Enable it once per database:
+
+```sql
+\c productivity
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+If that errors with *"extension 'vector' is not available"*, install the extension first:
+
+- *Prebuilt (easiest on Windows):* download a pgvector Windows build matching your PG version, then copy `vector.dll` into `C:\Program Files\PostgreSQL\16\lib\` and `vector.control` + `vector--*.sql` into `C:\Program Files\PostgreSQL\16\share\extension\`, then re-run `CREATE EXTENSION vector;`.
+- *Build from source (x64 Native Tools Command Prompt for VS):*
+  ```bat
+  set "PGROOT=C:\Program Files\PostgreSQL\16"
+  git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git
+  cd pgvector
+  nmake /F Makefile.win
+  nmake /F Makefile.win install
+  ```
+- *macOS/Linux:* `sudo apt install postgresql-16-pgvector` (Debian/Ubuntu) or `brew install pgvector`.
+
+Then push the schema:
+
+```bash
+npm --prefix server run db:push
+```
+
+**Option B — Skip pgvector (fastest; semantic search stays in keyword mode).**
+Semantic search is off by default (`EMBEDDINGS_ENABLED=false`), so you lose nothing for normal testing. Temporarily remove the vector bits from `server/prisma/schema.prisma`:
+
+1. In the `datasource db` block, delete the line `extensions = [vector]`.
+2. Comment out the two `embedding Unsupported("vector(1024)")?` lines (in `model Task` and `model Note`).
+
+Then:
+
+```bash
+npm --prefix server run db:push
+```
+
+Everything works; the **Search** page uses keyword matching (its default). Revert those three lines whenever you install pgvector.
 
 ---
 
