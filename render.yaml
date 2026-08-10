@@ -1,0 +1,60 @@
+# Render Blueprint: deploys the Express API and the FastAPI AI service.
+# The client is deployed separately to Vercel (see client/vercel.json).
+# Database: Supabase (managed PostgreSQL) — set DATABASE_URL / DIRECT_URL below.
+
+services:
+  - type: web
+    name: productivity-api
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx prisma migrate deploy && node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: productivity-ai
+          property: host
+      - key: EMBEDDINGS_ENABLED
+        value: "true"
+      - fromGroup: shared-secrets
+
+  - type: web
+    name: productivity-ai
+    runtime: python
+    rootDir: ai-service
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-4-8
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: EMBEDDING_MODEL
+        value: voyage-3
+      - fromGroup: shared-secrets
+
+# Shared secret so only the Express API can call the AI service.
+envVarGroups:
+  - name: shared-secrets
+    envVars:
+      - key: INTERNAL_API_KEY
+        generateValue: true

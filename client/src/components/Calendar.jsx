@@ -1,0 +1,141 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Plus } from 'lucide-react';
+import { calendarService, scheduleService, reminderService } from '@/services/calendarService';
+import { apiError } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { formatDate } from '@/lib/utils';
+
+const typeVariant = { task: 'medium', schedule: 'default', reminder: 'secondary' };
+
+function groupByDay(events) {
+  const groups = {};
+  for (const e of events) {
+    const day = new Date(e.date).toDateString();
+    (groups[day] = groups[day] || []).push(e);
+  }
+  return groups;
+}
+
+export default function Calendar() {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ title: '', startTime: '' });
+  const [reminder, setReminder] = useState({ message: '', remindAt: '' });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setEvents(await calendarService.events());
+    } catch (err) {
+      setError(apiError(err, 'Failed to load calendar'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const addSchedule = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim() || !form.startTime) return;
+    try {
+      await scheduleService.create({ title: form.title, startTime: new Date(form.startTime).toISOString() });
+      setForm({ title: '', startTime: '' });
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Failed to add event'));
+    }
+  };
+
+  const addReminder = async (e) => {
+    e.preventDefault();
+    if (!reminder.message.trim() || !reminder.remindAt) return;
+    try {
+      await reminderService.create({ message: reminder.message, remindAt: new Date(reminder.remindAt).toISOString() });
+      setReminder({ message: '', remindAt: '' });
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Failed to add reminder'));
+    }
+  };
+
+  const groups = groupByDay(events);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Add event</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={addSchedule} className="flex flex-col gap-2 sm:flex-row">
+            <Input placeholder="Event title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="flex-1" />
+            <Input type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
+            <Button type="submit">
+              <Plus className="h-4 w-4" /> Add
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Add reminder</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={addReminder} className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder="Remind me to…"
+              value={reminder.message}
+              onChange={(e) => setReminder({ ...reminder, message: e.target.value })}
+              className="flex-1"
+            />
+            <Input
+              type="datetime-local"
+              value={reminder.remindAt}
+              onChange={(e) => setReminder({ ...reminder, remindAt: e.target.value })}
+            />
+            <Button type="submit" variant="secondary">
+              <Plus className="h-4 w-4" /> Remind
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : events.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing scheduled. Add an event, task deadline, or reminder.</p>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(groups).map(([day, dayEvents]) => (
+            <Card key={day}>
+              <CardHeader>
+                <CardTitle className="text-base">{day}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {dayEvents.map((e) => (
+                  <div key={`${e.type}-${e.id}`} className="flex items-center justify-between border-b pb-2 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={typeVariant[e.type]}>{e.type}</Badge>
+                      <span className="text-sm">{e.title}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{formatDate(e.date, { withTime: true })}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
