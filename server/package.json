@@ -7,8 +7,11 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "start:prod": "prisma migrate deploy && cross-env NODE_ENV=production node server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "migrate:deploy": "prisma migrate deploy",
     "prisma:validate": "prisma validate",
     "lint": "eslint .",
     "test": "cross-env NODE_ENV=test jest --runInBand"

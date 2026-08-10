@@ -7,8 +7,12 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.docker
+.env.development
+.env.production
 *.env
 !.env.example
+!*.example
 
 # Build output
 dist/

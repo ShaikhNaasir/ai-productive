@@ -1,15 +1,15 @@
 # Getting Started — AI-Powered Personal Productivity Assistant
 
-Everything you need to install, run, and use the app in one place.
+Install, run (development **and** production), and use the app — all in one place.
 For the spec see `README.md`; for the phased build log see `PLAN.md`.
 
-The project is three services:
+Three services:
 
-| Service | Folder | Stack | Port |
-|---------|--------|-------|------|
-| Client | `client/` | React + Vite + Tailwind + shadcn/ui | 5173 |
-| API | `server/` | Node.js + Express + Prisma | 4000 |
-| AI service | `ai-service/` | Python + FastAPI + Anthropic | 8000 |
+| Service | Folder | Stack | Dev port | Prod port |
+|---------|--------|-------|:--------:|:---------:|
+| Client | `client/` | React + Vite + Tailwind + shadcn/ui | 5173 | 4173 (preview) / 80 (nginx) |
+| API | `server/` | Node.js + Express + Prisma | 4000 | 4000 |
+| AI service | `ai-service/` | Python + FastAPI + Anthropic | 8000 | 8000 |
 
 ---
 
@@ -17,132 +17,148 @@ The project is three services:
 
 - **Node.js** ≥ 20 and npm ≥ 10
 - **Python** ≥ 3.11
-- A **PostgreSQL** database with the **pgvector** extension — easiest is a free [Supabase](https://supabase.com) project
-- An **Anthropic API key** — for the AI features ([console.anthropic.com](https://console.anthropic.com))
-- *(optional)* a **Voyage AI key** — only for semantic (meaning-based) search
+- A **PostgreSQL** database with the **pgvector** extension. Pick one:
+  - **Supabase** (cloud, free) — pgvector is built in, or
+  - **Docker** — `docker compose up` brings up a bundled `pgvector/pgvector` Postgres (see §5), or
+  - a **local Postgres** with `CREATE EXTENSION vector`.
+- *(optional)* **Anthropic API key** — for AI features
+- *(optional)* **Voyage AI key** — for semantic (meaning-based) search
 
-> The app runs without the AI keys: task/note/calendar/reminder CRUD all work, and search falls back to keyword matching. AI buttons will show a friendly "unavailable" message until keys are set.
-
----
-
-## 2. Configuration
-
-Each service has a `.env.example`. Copy it to `.env` and fill in the values.
-
-### `server/.env`
-```
-DATABASE_URL="postgresql://USER:PASS@HOST:6543/postgres?pgbouncer=true"   # Supabase pooled URI
-DIRECT_URL="postgresql://USER:PASS@HOST:5432/postgres"                    # Supabase direct URI (migrations)
-JWT_SECRET="a-long-random-string"
-PORT=4000
-CLIENT_ORIGIN="http://localhost:5173"
-AI_SERVICE_URL="http://localhost:8000"
-INTERNAL_API_KEY="pick-any-shared-secret"     # must match ai-service
-EMBEDDINGS_ENABLED="false"                      # set true only with a Voyage key + pgvector
-```
-
-### `ai-service/.env`
-```
-ANTHROPIC_API_KEY="sk-ant-..."
-ANTHROPIC_MODEL="claude-opus-4-8"
-VOYAGE_API_KEY=""                               # optional, semantic search only
-EMBEDDING_MODEL="voyage-3"
-INTERNAL_API_KEY="pick-any-shared-secret"       # must match server
-PORT=8000
-```
-
-### `client/.env`
-```
-VITE_API_URL="http://localhost:4000"
-```
-
-`INTERNAL_API_KEY` **must be identical** in `server/.env` and `ai-service/.env` — it is the shared secret that lets only the API call the AI service.
+> The app degrades gracefully: without AI keys, task/note/calendar/reminder CRUD all work and search falls back to keyword matching.
 
 ---
 
-## 3. Install & run
+## 2. One-time setup
 
-Open three terminals.
-
-### Terminal 1 — API (`server/`)
-```bash
-cd server
-npm install
-npx prisma migrate dev        # creates tables in your database
-npm run dev                   # http://localhost:4000
-```
-After the first migration, enable semantic-search indexes (only if using pgvector):
-```bash
-psql "$DIRECT_URL" -f prisma/sql/pgvector_indexes.sql
-```
-
-### Terminal 2 — AI service (`ai-service/`)
-```bash
-cd ai-service
-python -m venv .venv
-# Windows PowerShell:  .venv\Scripts\Activate.ps1
-# Windows Git Bash:    source .venv/Scripts/activate
-# macOS/Linux:         source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000   # http://localhost:8000
-```
-
-### Terminal 3 — Client (`client/`)
-```bash
-cd client
-npm install
-npm run dev                   # http://localhost:5173
-```
-
-Open **http://localhost:5173** and register an account.
-
----
-
-## 4. How to use
-
-1. **Register / Sign in** — create an account; the session token is stored in the browser.
-2. **Dashboard** — see completed / pending / overdue counts and a weekly-progress chart.
-3. **Tasks**
-   - Add manually (title, priority, due date), or
-   - **AI Add**: type plain English like *"Prepare for my interview next Friday"* — the AI extracts the title, priority, and date and creates the task.
-   - **Suggest priorities**: AI ranks your open tasks 🔥/🟡/🟢 with reasons.
-   - Complete ✓ or delete 🗑 any task; filter by status.
-4. **Notes** — create notes with categories and tags, pin important ones, search, and click ✨ to get an AI **key-points summary**.
-5. **Calendar** — add events and reminders; it aggregates task deadlines, events, and reminders by day.
-6. **Assistant** — chat: *"What do I need to finish today?"*, *"Which tasks should I prioritize?"*, *"Plan my day."* The assistant answers using your own tasks/notes/schedule.
-7. **Reminders** — when a reminder's time arrives, the server pushes a live notification to the 🔔 bell in the header (Socket.IO).
-8. **Search** — search by meaning (*"things related to my upcoming interview"*) across notes and tasks. Uses embeddings when configured, keyword matching otherwise.
-9. **Settings** — update your name/email or change your password.
-10. **Dark mode** — toggle with the moon/sun button in the header.
-
----
-
-## 5. Running the tests
+From the repo root:
 
 ```bash
-cd server     && npm test        # Jest + Supertest  (41 tests)
-cd ai-service && .venv/Scripts/python -m pytest      # pytest (9 tests)
-cd client     && npm test && npm run build           # Vitest + production build
+npm install        # installs the root orchestrator (concurrently)
+npm run setup      # installs server + client deps, creates the Python venv, installs ai-service deps
+```
+
+`npm run setup` runs the Windows venv path. On macOS/Linux run `npm run setup:ai:unix` instead of the ai step.
+
+**Environment files** — ready-to-edit `.env` files already exist in each service (gitignored). Edit these two values before running:
+
+- `server/.env` → set `DATABASE_URL` and `DIRECT_URL` to your Postgres.
+- `ai-service/.env` → set `ANTHROPIC_API_KEY` (optional; leave blank to run without AI).
+
+`INTERNAL_API_KEY` is pre-set to the same value (`dev-internal-key`) in both — keep them matching.
+
+**Create the database tables** (once your `DATABASE_URL` points at a real DB):
+
+```bash
+npm --prefix server run db:push      # fast: pushes the schema directly (best for dev)
+# or, to use versioned migrations:
+npm --prefix server run prisma:migrate   # creates prisma/migrations and applies them
 ```
 
 ---
 
-## 6. Deployment (summary)
+## 3. Development mode  ▶ (what you asked for)
 
-- **Client → Vercel**: `client/vercel.json` is preconfigured (Vite build + SPA rewrites). Set `VITE_API_URL` to your deployed API URL.
-- **Server + AI service → Render**: the root `render.yaml` blueprint provisions both, with a generated shared `INTERNAL_API_KEY`. Dockerfiles are also provided for any container host (Railway, Fly, etc.).
-- **Database → Supabase**: set `DATABASE_URL` / `DIRECT_URL`; migrations run automatically on deploy (`prisma migrate deploy`).
+**Start all three services with one command** (hot reload on all):
 
-See the **Running & Deployment** section of `README.md` for the full secrets table.
+```bash
+npm run dev
+```
+
+- Client → http://localhost:5173
+- API → http://localhost:4000
+- AI service → http://localhost:8000
+
+Output from all three is interleaved and color-tagged (`server`/`ai`/`client`). Ctrl-C stops them all.
+
+Run one service at a time if you prefer:
+
+```bash
+npm run dev:server     # nodemon (auto-restart)
+npm run dev:client     # vite dev server
+npm run dev:ai         # uvicorn --reload   (Windows; use dev:ai:unix on macOS/Linux)
+```
+
+Open http://localhost:5173 and register an account.
 
 ---
 
-## 7. Troubleshooting
+## 4. Production mode (run the prod build locally)
+
+```bash
+npm run build          # builds the client (dist/) + generates the Prisma client
+npm start              # runs all three in production mode
+```
+
+`npm start` does:
+- **server**: `prisma migrate deploy` then `NODE_ENV=production node server.js` on :4000
+- **ai**: `uvicorn` (no reload) on :8000
+- **client**: `vite preview` serving the built `dist/` on :4173
+
+> Production uses versioned migrations (`migrate deploy`), so generate them once with
+> `npm --prefix server run prisma:migrate` (needs DB access) and commit `server/prisma/migrations/`.
+> For a quick prod-style run without migrations, use `npm --prefix server run db:push` first.
+
+Production env: copy `server/.env.production.example` and `client/.env.production.example`
+and set the real hosts/secrets (strong `JWT_SECRET`, deployed `CLIENT_ORIGIN`, `VITE_API_URL`, etc.).
+
+---
+
+## 5. Docker (self-contained local stack, incl. database)
+
+If you have Docker, this is the zero-config way to run everything **with a real pgvector Postgres** — no Supabase needed:
+
+```bash
+cp .env.docker.example .env.docker    # add ANTHROPIC_API_KEY if you want AI
+docker compose up
+```
+
+Brings up: `db` (pgvector Postgres on :5432), `server` (:4000, auto `prisma db push`), `ai` (:8000), `client` (:5173), all with hot reload. Data persists in a named volume.
+
+---
+
+## 6. How to use
+
+1. **Register / Sign in** — the session token is stored in the browser.
+2. **Dashboard** — completed / pending / overdue counts + weekly-progress chart.
+3. **Tasks** — add manually, or **AI Add** a plain-English task (*"Prepare for my interview next Friday"*); **Suggest priorities** ranks open tasks 🔥/🟡/🟢; complete/delete/filter.
+4. **Notes** — categories, tags, pin, search; ✨ button = AI key-points summary.
+5. **Calendar** — add events and reminders; aggregates deadlines + events + reminders by day.
+6. **Assistant** — chat grounded in your own data: *"What do I need to finish today?"*, *"Plan my day."*
+7. **Reminders** — fire as live 🔔 notifications (Socket.IO) when their time arrives.
+8. **Search** — search by meaning across notes and tasks (keyword fallback without a Voyage key).
+9. **Settings** — update name/email or change password.
+10. **Dark mode** — moon/sun toggle in the header.
+
+---
+
+## 7. Tests
+
+```bash
+npm test                                            # server (Jest) + client (Vitest)
+cd ai-service && .venv/Scripts/python -m pytest     # ai-service (pytest)
+```
+
+Server: 41 · AI service: 9 · Client: 3 + production build.
+
+---
+
+## 8. Deployment (cloud)
+
+- **Client → Vercel**: `client/vercel.json` (Vite build + SPA rewrites). Set `VITE_API_URL`.
+- **Server + AI service → Render**: root `render.yaml` blueprint (Node + Python, shared `INTERNAL_API_KEY`). Dockerfiles provided for any container host (also a client `Dockerfile` + `nginx.conf`).
+- **Database → Supabase**: set `DATABASE_URL`/`DIRECT_URL`; `prisma migrate deploy` runs on deploy. After the first deploy, run `server/prisma/sql/pgvector_indexes.sql` for semantic-search indexes.
+
+Full secrets table is in the **Running & Deployment** section of `README.md`.
+
+---
+
+## 9. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| `Missing required environment variable: JWT_SECRET` | Create `server/.env` from the example. |
-| AI buttons say "AI service is unavailable" | Start the ai-service and set `ANTHROPIC_API_KEY`; confirm `INTERNAL_API_KEY` matches on both sides. |
-| `prisma migrate` fails to connect | Check `DATABASE_URL` / `DIRECT_URL`; use the Supabase **direct** URI for migrations. |
-| Search returns keyword results only | Expected unless `EMBEDDINGS_ENABLED=true` **and** `VOYAGE_API_KEY` is set **and** pgvector indexes exist. |
-| Reminders don't pop up | The scheduler polls every 30s; make sure the reminder time has passed and you're signed in (the socket authenticates with your token). |
+| `Missing required environment variable: JWT_SECRET` | It's already set in `server/.env`; make sure you didn't delete it. |
+| `prisma db push` / `migrate` can't connect | Fix `DATABASE_URL`/`DIRECT_URL`; ensure Postgres has the `vector` extension (Supabase does; local needs `CREATE EXTENSION vector`). |
+| AI buttons say "AI service is unavailable" | Set `ANTHROPIC_API_KEY` in `ai-service/.env`; confirm `INTERNAL_API_KEY` matches on both sides. |
+| `dev:ai` fails: uvicorn not found | Run `npm run setup:ai` (creates the venv). On macOS/Linux use `npm run dev:ai:unix`. |
+| Search only returns keyword results | Expected unless `EMBEDDINGS_ENABLED=true` + `VOYAGE_API_KEY` set + pgvector indexes exist. |
+| Reminders don't pop up | Scheduler polls every 30s; the reminder time must have passed and you must be signed in. |

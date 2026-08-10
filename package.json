@@ -1,0 +1,33 @@
+{
+  "name": "productivity-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-Powered Personal Productivity Assistant — monorepo orchestrator (client + server + ai-service)",
+  "scripts": {
+    "setup": "npm run setup:server && npm run setup:client && npm run setup:ai",
+    "setup:server": "npm --prefix server install && npm --prefix server run prisma:generate",
+    "setup:client": "npm --prefix client install",
+    "setup:ai": "cd ai-service && python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt",
+    "setup:ai:unix": "cd ai-service && python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt",
+
+    "dev": "concurrently -k -n server,ai,client -c blue,magenta,green \"npm:dev:server\" \"npm:dev:ai\" \"npm:dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "dev:ai": "cd ai-service && .venv/Scripts/uvicorn main:app --reload --port 8000",
+    "dev:ai:unix": "cd ai-service && .venv/bin/uvicorn main:app --reload --port 8000",
+
+    "build": "npm --prefix client run build && npm --prefix server run prisma:generate",
+    "migrate:deploy": "npm --prefix server run migrate:deploy",
+
+    "start": "concurrently -k -n server,ai,client -c blue,magenta,green \"npm:start:server\" \"npm:start:ai\" \"npm:start:client\"",
+    "start:server": "npm --prefix server run start:prod",
+    "start:client": "npm --prefix client run preview -- --port 4173",
+    "start:ai": "cd ai-service && .venv/Scripts/uvicorn main:app --host 0.0.0.0 --port 8000",
+    "start:ai:unix": "cd ai-service && .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000",
+
+    "test": "npm --prefix server test && npm --prefix client test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

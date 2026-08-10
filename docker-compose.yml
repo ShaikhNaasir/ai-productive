@@ -1,0 +1,81 @@
+# Self-contained LOCAL stack for development / testing.
+# Brings up a pgvector-enabled Postgres plus all three services with hot reload,
+# so you can run the whole app without a Supabase account.
+#
+#   cp .env.docker.example .env.docker   # then add your ANTHROPIC_API_KEY
+#   docker compose up
+#
+# Client:  http://localhost:5173
+# API:     http://localhost:4000
+# AI:      http://localhost:8000
+# DB:      localhost:5432  (postgres/postgres)
+#
+# For production deployment use render.yaml + the per-service Dockerfiles instead.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: productivity
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d productivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    image: node:20-alpine
+    working_dir: /app
+    env_file: .env.docker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/productivity
+      DIRECT_URL: postgresql://postgres:postgres@db:5432/productivity
+      AI_SERVICE_URL: http://ai:8000
+      CLIENT_ORIGIN: http://localhost:5173
+      PORT: "4000"
+    command: sh -c "npm install && npx prisma db push --accept-data-loss && npm run dev"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./server:/app
+      - server_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ai:
+    image: python:3.12-slim
+    working_dir: /app
+    env_file: .env.docker
+    environment:
+      PORT: "8000"
+    command: sh -c "pip install --no-cache-dir -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-service:/app
+
+  client:
+    image: node:20-alpine
+    working_dir: /app
+    environment:
+      VITE_API_URL: http://localhost:4000
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/app
+      - client_node_modules:/app/node_modules
+    depends_on:
+      - server
+
+volumes:
+  pgdata:
+  server_node_modules:
+  client_node_modules:
