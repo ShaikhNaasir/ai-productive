@@ -213,13 +213,27 @@ Server: 41 · AI service: 9 · Client: 3 + production build.
 
 ---
 
-## 8. Deployment (cloud)
+## 8. Deployment — Render (one click, everything live)
 
-- **Client → Vercel**: `client/vercel.json` (Vite build + SPA rewrites). Set `VITE_API_URL`.
-- **Server + AI service → Render**: root `render.yaml` blueprint (Node + Python, shared `INTERNAL_API_KEY`). Dockerfiles provided for any container host (also a client `Dockerfile` + `nginx.conf`).
-- **Database → Supabase**: set `DATABASE_URL`/`DIRECT_URL`; `prisma migrate deploy` runs on deploy. After the first deploy, run `server/prisma/sql/pgvector_indexes.sql` for semantic-search indexes.
+The root `render.yaml` deploys **all four pieces** — client, API, AI service, and a
+pgvector Postgres — with the database URL, service-to-service URLs, CORS origin, and
+the shared secret all auto-wired.
 
-Full secrets table is in the **Running & Deployment** section of `README.md`.
+1. Push this repo to GitHub.
+2. Render Dashboard → **New → Blueprint** → select the repo → **Apply**.
+3. Once it builds, open the **productivity-ai** service and set **`ANTHROPIC_API_KEY`**
+   (and optionally `VOYAGE_API_KEY` for semantic search). That's the only manual value.
+4. Visit the **productivity-client** URL — the app is live.
+
+Notes:
+- The API runs `prisma db push` on start, so tables are created automatically — no
+  migration files needed. The managed Postgres enables the `vector` extension.
+- Free Render services spin down when idle and free databases expire after ~30 days —
+  fine for testing.
+
+Alternative (Vercel + Render split): `client/vercel.json` deploys the client to Vercel;
+per-service Dockerfiles (`server/`, `ai-service/`, `client/` + `nginx.conf`) work on any
+container host. Full secrets table is in `README.md`.
 
 ---
 

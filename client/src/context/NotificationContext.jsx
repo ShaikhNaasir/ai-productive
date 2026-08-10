@@ -4,7 +4,8 @@ import { getToken } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 const NotificationContext = createContext(null);
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const rawSocketUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const SOCKET_URL = /^https?:\/\//.test(rawSocketUrl) ? rawSocketUrl : `https://${rawSocketUrl}`;
 
 export function NotificationProvider({ children }) {
   const { user } = useAuth();

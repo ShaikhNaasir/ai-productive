@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Render's blueprint injects a bare hostname for VITE_API_URL; add https:// if missing.
+const raw = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const baseURL = /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
 
 export const api = axios.create({
   baseURL: `${baseURL}/api`,

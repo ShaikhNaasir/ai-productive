@@ -1,38 +1,54 @@
-# Render Blueprint: deploys the Express API and the FastAPI AI service.
-# The client is deployed separately to Vercel (see client/vercel.json).
-# Database: Supabase (managed PostgreSQL) — set DATABASE_URL / DIRECT_URL below.
+# Render Blueprint — deploys the whole app (client + API + AI service + database).
+# One click: Render Dashboard > New > Blueprint > pick this repo.
+#
+# Auto-wired: database URL, service-to-service URLs, CORS origin, shared secret.
+# You only set ONE secret by hand: ANTHROPIC_API_KEY (on the productivity-ai service),
+# and optionally VOYAGE_API_KEY for semantic search.
+
+databases:
+  - name: productivity-db
+    plan: free
+    postgresMajorVersion: "16"
 
 services:
+  # ---- Express API ----
   - type: web
     name: productivity-api
     runtime: node
     rootDir: server
     plan: free
     buildCommand: npm install && npx prisma generate
-    startCommand: npx prisma migrate deploy && node server.js
+    # db push creates the schema directly — no migration files needed.
+    startCommand: npx prisma db push --accept-data-loss && node server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 4000
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: productivity-db
+          property: connectionString
       - key: DIRECT_URL
-        sync: false
+        fromDatabase:
+          name: productivity-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      - key: CLIENT_ORIGIN
-        sync: false
       - key: AI_SERVICE_URL
         fromService:
           type: web
           name: productivity-ai
           property: host
+      - key: CLIENT_ORIGIN
+        fromService:
+          type: web
+          name: productivity-client
+          property: host
       - key: EMBEDDINGS_ENABLED
-        value: "true"
+        value: "false"
       - fromGroup: shared-secrets
 
+  # ---- FastAPI AI service ----
   - type: web
     name: productivity-ai
     runtime: python
@@ -43,16 +59,34 @@ services:
     healthCheckPath: /health
     envVars:
       - key: ANTHROPIC_API_KEY
-        sync: false
+        sync: false          # set this in the Render dashboard
       - key: ANTHROPIC_MODEL
         value: claude-opus-4-8
       - key: VOYAGE_API_KEY
-        sync: false
+        sync: false          # optional (semantic search)
       - key: EMBEDDING_MODEL
         value: voyage-3
       - fromGroup: shared-secrets
 
-# Shared secret so only the Express API can call the AI service.
+  # ---- React client (static site) ----
+  - type: web
+    name: productivity-client
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: productivity-api
+          property: host
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+# Shared secret so only the API can call the AI service.
 envVarGroups:
   - name: shared-secrets
     envVars:
