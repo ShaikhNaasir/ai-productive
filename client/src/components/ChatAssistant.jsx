@@ -35,7 +35,7 @@ export default function ChatAssistant() {
       const reply = await aiService.chat(message, history);
       setMessages((m) => [...m, { role: 'assistant', content: reply }]);
     } catch (err) {
-      setMessages((m) => [...m, { role: 'assistant', content: `⚠️ ${apiError(err, 'Assistant unavailable')}`, error: true }]);
+      setMessages((m) => [...m, { role: 'assistant', content: apiError(err, 'Assistant unavailable'), error: true }]);
     } finally {
       setLoading(false);
     }

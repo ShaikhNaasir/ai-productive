@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-const emoji = { HIGH: '🔥', MEDIUM: '🟡', LOW: '🟢' };
+const mark = { HIGH: '●', MEDIUM: '◑', LOW: '○' };
 const variant = { HIGH: 'high', MEDIUM: 'medium', LOW: 'low' };
 
 export default function PriorityPanel() {
@@ -44,7 +44,7 @@ export default function PriorityPanel() {
         {recs?.length === 0 && <p className="text-sm text-muted-foreground">No open tasks to prioritize.</p>}
         {recs?.map((r, i) => (
           <div key={r.id || i} className="flex items-start gap-2 border-b pb-2 last:border-0">
-            <span>{emoji[r.priority] || '•'}</span>
+            <span className="leading-6">{mark[r.priority] || '•'}</span>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{r.title}</span>

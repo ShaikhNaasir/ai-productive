@@ -10,9 +10,10 @@ const badgeVariants = cva(
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         destructive: 'border-transparent bg-destructive text-destructive-foreground',
         outline: 'text-foreground',
-        high: 'border-transparent bg-red-500 text-white',
-        medium: 'border-transparent bg-yellow-500 text-black',
-        low: 'border-transparent bg-green-500 text-white',
+        // Priority badges, monochrome: filled = high, muted = medium, outline = low.
+        high: 'border-transparent bg-foreground text-background',
+        medium: 'border-transparent bg-muted text-foreground',
+        low: 'border border-foreground/40 bg-transparent text-foreground',
       },
     },
     defaultVariants: { variant: 'default' },

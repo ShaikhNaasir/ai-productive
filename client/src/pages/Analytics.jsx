@@ -16,7 +16,8 @@ import { apiError } from '@/lib/api';
 import StatCard from '@/components/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const COLORS = ['#3b82f6', '#22c55e', '#eab308', '#ef4444', '#a855f7', '#06b6d4'];
+// Monochrome: distinguish slices by opacity of the current (theme) foreground color.
+const SLICE_OPACITY = [0.9, 0.6, 0.35, 0.75, 0.5, 0.25];
 
 export default function Analytics() {
   const [summary, setSummary] = useState(null);
@@ -45,9 +46,9 @@ export default function Analytics() {
       <h1 className="text-2xl font-bold">Analytics</h1>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Completed" value={summary.completed} accent="text-green-500" />
-        <StatCard label="Pending" value={summary.pending} accent="text-yellow-500" />
-        <StatCard label="Overdue" value={summary.overdue} accent="text-red-500" />
+        <StatCard label="Completed" value={summary.completed} />
+        <StatCard label="Pending" value={summary.pending} />
+        <StatCard label="Overdue" value={summary.overdue} />
         <StatCard label="Completion Rate" value={`${summary.completionRate}%`} />
       </div>
 
@@ -56,13 +57,13 @@ export default function Analytics() {
           <CardTitle className="text-base">Tasks completed (last 7 days)</CardTitle>
         </CardHeader>
         <CardContent className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" className="text-foreground">
             <BarChart data={trends.perDay}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} fontSize={12} />
               <YAxis allowDecimals={false} fontSize={12} />
               <Tooltip />
-              <Bar dataKey="completed" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="completed" fill="currentColor" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -77,12 +78,12 @@ export default function Analytics() {
             {trends.categoryWorkload.length === 0 ? (
               <p className="text-sm text-muted-foreground">No tagged tasks yet.</p>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" className="text-foreground">
                 <BarChart data={trends.categoryWorkload} layout="vertical">
                   <XAxis type="number" allowDecimals={false} fontSize={12} />
                   <YAxis type="category" dataKey="tag" fontSize={12} width={80} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#22c55e" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" fill="currentColor" fillOpacity={0.7} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -94,11 +95,11 @@ export default function Analytics() {
             <CardTitle className="text-base">Status breakdown</CardTitle>
           </CardHeader>
           <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" className="text-foreground">
               <PieChart>
                 <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
                   {statusData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={i} fill="currentColor" fillOpacity={SLICE_OPACITY[i % SLICE_OPACITY.length]} stroke="hsl(var(--background))" />
                   ))}
                 </Pie>
                 <Tooltip />

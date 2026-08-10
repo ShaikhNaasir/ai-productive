@@ -27,14 +27,14 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Welcome{user?.name ? `, ${user.name}` : ''} 👋</h1>
+        <h1 className="text-2xl font-bold">Welcome{user?.name ? `, ${user.name}` : ''}</h1>
         <p className="text-muted-foreground">Here is your productivity overview.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Completed" value={summary?.completed ?? '—'} accent="text-green-500" />
-        <StatCard label="Pending" value={summary?.pending ?? '—'} accent="text-yellow-500" />
-        <StatCard label="Overdue" value={summary?.overdue ?? '—'} accent="text-red-500" />
+        <StatCard label="Completed" value={summary?.completed ?? '—'} />
+        <StatCard label="Pending" value={summary?.pending ?? '—'} />
+        <StatCard label="Overdue" value={summary?.overdue ?? '—'} />
         <StatCard label="Completion" value={summary ? `${summary.completionRate}%` : '—'} />
       </div>
 
@@ -47,11 +47,11 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent className="h-48">
           {trends ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" className="text-foreground">
               <BarChart data={trends.perDay}>
                 <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} fontSize={12} />
                 <Tooltip />
-                <Bar dataKey="completed" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="completed" fill="currentColor" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 function Status({ msg }) {
   if (!msg) return null;
-  return <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-destructive'}`}>{msg.text}</p>;
+  return <p className={`text-sm ${msg.ok ? 'text-foreground' : 'text-destructive'}`}>{msg.text}</p>;
 }
 
 export default function Settings() {

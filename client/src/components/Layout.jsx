@@ -53,7 +53,7 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-60 flex-col border-r bg-card p-4 md:flex">
-        <div className="mb-6 px-2 text-lg font-bold">🤖 Productivity</div>
+        <div className="mb-6 px-2 text-lg font-bold tracking-tight">Productivity</div>
         <nav className="flex flex-1 flex-col gap-1">
           {nav.map((item) => (
             <NavLink
@@ -77,7 +77,7 @@ export default function Layout() {
 
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b bg-card px-4 py-3">
-          <div className="text-sm text-muted-foreground md:hidden">🤖 Productivity</div>
+          <div className="text-sm font-semibold md:hidden">Productivity</div>
           <div className="ml-auto flex items-center gap-2">
             <div className="relative">
               <Button variant="ghost" size="icon" onClick={toggleBell} aria-label="Notifications">
