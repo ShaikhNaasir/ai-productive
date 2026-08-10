@@ -4,6 +4,8 @@ const { z } = require('zod');
 const prisma = require('../models/prisma');
 const aiClient = require('../services/aiClient');
 const ApiError = require('../utils/ApiError');
+const config = require('../config/env');
+const embeddingService = require('../services/embeddingService');
 
 const textSchema = z.object({ text: z.string().trim().min(1) });
 const summarizeSchema = z.object({
@@ -99,4 +101,22 @@ async function chat(req, res) {
   res.json(result);
 }
 
-module.exports = { parseTask, createTaskFromText, summarize, prioritize, chat };
+// Backfill embeddings for all of the user's existing tasks and notes so semantic
+// search works over data created before embeddings were enabled.
+async function reindex(req, res) {
+  if (!config.embeddingsEnabled) {
+    throw ApiError.badRequest('Embeddings are disabled. Set EMBEDDINGS_ENABLED=true (and a Voyage key) first.');
+  }
+  const userId = req.user.id;
+  const [tasks, notes] = await Promise.all([
+    prisma.task.findMany({ where: { userId } }),
+    prisma.note.findMany({ where: { userId } }),
+  ]);
+  await Promise.all([
+    ...tasks.map((t) => embeddingService.indexTask(t)),
+    ...notes.map((n) => embeddingService.indexNote(n)),
+  ]);
+  res.json({ indexed: tasks.length + notes.length });
+}
+
+module.exports = { parseTask, createTaskFromText, summarize, prioritize, chat, reindex };

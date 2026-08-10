@@ -68,6 +68,15 @@ describe('tasks', () => {
     expect(res.body.task.title).toBe('updated');
   });
 
+  test('set task status to IN_PROGRESS', async () => {
+    const created = await request(app).post('/api/tasks').set(auth()).send({ title: 'wip' });
+    const id = created.body.task.id;
+    const res = await request(app).patch(`/api/tasks/${id}`).set(auth()).send({ status: 'IN_PROGRESS' });
+    expect(res.status).toBe(200);
+    expect(res.body.task.status).toBe('IN_PROGRESS');
+    expect(res.body.task.completedAt).toBeNull();
+  });
+
   test('delete task', async () => {
     const created = await request(app).post('/api/tasks').set(auth()).send({ title: 'temp' });
     const id = created.body.task.id;

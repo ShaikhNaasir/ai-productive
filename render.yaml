@@ -45,7 +45,7 @@ services:
           name: productivity-client
           envVarKey: RENDER_EXTERNAL_URL
       - key: EMBEDDINGS_ENABLED
-        value: "false"
+        sync: false          # set to "true" in the dashboard once VOYAGE_API_KEY is added
       - fromGroup: shared-secrets
 
   # ---- FastAPI AI service ----

@@ -6,4 +6,5 @@ export const aiService = {
   summarize: (payload) => api.post('/ai/summarize', payload).then((r) => r.data),
   prioritize: () => api.post('/ai/prioritize').then((r) => r.data.recommendations),
   chat: (message, history) => api.post('/ai/chat', { message, history }).then((r) => r.data.reply),
+  reindex: () => api.post('/ai/reindex').then((r) => r.data),
 };

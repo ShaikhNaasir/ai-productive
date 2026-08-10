@@ -14,5 +14,6 @@ router.post('/tasks', asyncHandler(ctrl.createTaskFromText));
 router.post('/summarize', asyncHandler(ctrl.summarize));
 router.post('/prioritize', asyncHandler(ctrl.prioritize));
 router.post('/chat', asyncHandler(ctrl.chat));
+router.post('/reindex', asyncHandler(ctrl.reindex));
 
 module.exports = router;

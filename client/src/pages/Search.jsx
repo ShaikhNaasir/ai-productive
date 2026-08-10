@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Search as SearchIcon } from 'lucide-react';
 import { searchService } from '@/services/searchService';
+import { aiService } from '@/services/aiService';
 import { apiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,17 @@ export default function Search() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [indexMsg, setIndexMsg] = useState('');
+
+  const reindex = async () => {
+    setIndexMsg('Indexing…');
+    try {
+      const { indexed } = await aiService.reindex();
+      setIndexMsg(`Indexed ${indexed} item(s) for semantic search.`);
+    } catch (err) {
+      setIndexMsg(apiError(err, 'Reindex failed'));
+    }
+  };
 
   const run = async (e) => {
     e.preventDefault();
@@ -40,6 +52,13 @@ export default function Search() {
           <SearchIcon className="h-4 w-4" /> Search
         </Button>
       </form>
+
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={reindex}>
+          Rebuild search index
+        </Button>
+        {indexMsg && <span className="text-xs text-muted-foreground">{indexMsg}</span>}
+      </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {loading && <p className="text-sm text-muted-foreground">Searching…</p>}

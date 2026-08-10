@@ -76,6 +76,15 @@ export default function TaskList() {
     load();
   };
 
+  const updateStatus = async (id, status) => {
+    try {
+      await taskService.update(id, { status });
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Failed to update status'));
+    }
+  };
+
   const remove = async (id) => {
     await taskService.remove(id);
     setTasks((t) => t.filter((x) => x.id !== id));
@@ -160,9 +169,19 @@ export default function TaskList() {
                   {task.tags?.length ? ` · ${task.tags.join(', ')}` : ''}
                 </div>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0 items-center gap-1">
+                <select
+                  value={task.status}
+                  onChange={(e) => updateStatus(task.id, e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+                  aria-label="Task status"
+                >
+                  <option value="PENDING">Pending</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="COMPLETED">Completed</option>
+                </select>
                 {task.status !== 'COMPLETED' && (
-                  <Button size="icon" variant="ghost" onClick={() => complete(task.id)} aria-label="Complete">
+                  <Button size="icon" variant="ghost" onClick={() => complete(task.id)} aria-label="Mark complete">
                     <Check className="h-4 w-4" />
                   </Button>
                 )}

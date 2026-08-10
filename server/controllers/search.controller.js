@@ -61,12 +61,16 @@ async function search(req, res) {
 
   if (config.embeddingsEnabled) {
     try {
-      results = await vectorSearch(userId, q, limit);
-      mode = 'semantic';
+      const semantic = await vectorSearch(userId, q, limit);
+      // Only use semantic results if there are any; otherwise fall through to keyword
+      // (e.g. before existing rows have been indexed).
+      if (semantic.length > 0) {
+        results = semantic;
+        mode = 'semantic';
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[search] semantic search failed, falling back to keyword: ${err.message}`);
-      results = null;
     }
   }
 
