@@ -153,3 +153,14 @@ Outstanding blockers (external credentials only — cannot be resolved in-repo):
 2. Live LLM calls — need `ANTHROPIC_API_KEY` (unit tests mock the LLM).
 3. Semantic search at runtime — needs `VOYAGE_API_KEY` + `EMBEDDINGS_ENABLED=true` (keyword fallback works + tested).
 4. Cloud deploy — needs Vercel/Render/Supabase accounts. All config committed.
+
+## Post-launch improvements
+
+- **UI**: minimalist black & white theme (grayscale tokens, theme-aware charts).
+- **Editing**: inline edit for tasks (title/priority/due) and notes (title/content/category/tags) — closed a real gap (previously create/delete only).
+- **Task status**: per-task Pending / In Progress / Completed dropdown.
+- **Search UX**: debounced notes search; delete confirmation on tasks/notes.
+- **Auth UX**: password show/hide toggle on login/register.
+- **Backend hardening**: `helmet` (security headers), `compression` (gzip), `express-rate-limit` on `/api/auth` (brute-force throttle, disabled in tests), `trust proxy` for Render.
+- **Semantic search**: keyword fallback when semantic returns empty; `POST /api/ai/reindex` + "Rebuild search index" button to backfill embeddings.
+- **Render**: one-click blueprint with managed pgvector Postgres + `db push` (no migration files needed) + auto-wired URLs.

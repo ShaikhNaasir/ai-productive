@@ -3,15 +3,21 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const helmet = require('helmet');
+const compression = require('compression');
 const cookieParser = require('cookie-parser');
 
 const config = require('./config/env');
 const routes = require('./routes');
+const { authLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/error');
 
 function createApp() {
   const app = express();
 
+  app.set('trust proxy', 1); // behind Render's proxy — needed for correct client IPs / rate limiting
+  app.use(helmet());
+  app.use(compression());
   app.use(
     cors({
       origin: config.clientOrigin,
@@ -24,6 +30,8 @@ function createApp() {
 
   if (!config.isTest) {
     app.use(morgan('dev'));
+    // Throttle auth endpoints to slow brute-force attempts (disabled in tests).
+    app.use('/api/auth', authLimiter);
   }
 
   // Wire embedding indexing hooks so task/note writes refresh their vectors
