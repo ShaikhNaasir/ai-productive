@@ -38,12 +38,12 @@ services:
         fromService:
           type: web
           name: productivity-ai
-          property: host
+          envVarKey: RENDER_EXTERNAL_URL
       - key: CLIENT_ORIGIN
         fromService:
           type: web
           name: productivity-client
-          property: host
+          envVarKey: RENDER_EXTERNAL_URL
       - key: EMBEDDINGS_ENABLED
         value: "false"
       - fromGroup: shared-secrets
