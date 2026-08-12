@@ -6,12 +6,14 @@ const upper = (v) => (typeof v === 'string' ? v.toUpperCase().replace(/\s+/g, '_
 
 const priority = z.preprocess(upper, z.enum(['LOW', 'MEDIUM', 'HIGH']));
 const status = z.preprocess(upper, z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']));
+const recurrence = z.preprocess(upper, z.enum(['NONE', 'DAILY', 'WEEKLY', 'MONTHLY']));
 
 const createTaskSchema = z.object({
   title: z.string().trim().min(1).max(300),
   description: z.string().max(5000).optional(),
   priority: priority.optional(),
   status: status.optional(),
+  recurrence: recurrence.optional(),
   dueDate: z.coerce.date().optional().nullable(),
   tags: z.array(z.string().trim().min(1)).max(50).optional(),
 });

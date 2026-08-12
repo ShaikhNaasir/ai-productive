@@ -7,10 +7,10 @@ let counter = 1;
 const nextId = () => String(counter++);
 
 const modelDefaults = {
-  tasks: { priority: 'MEDIUM', status: 'PENDING', tags: [], description: null, dueDate: null, completedAt: null },
+  tasks: { priority: 'MEDIUM', status: 'PENDING', recurrence: 'NONE', tags: [], description: null, dueDate: null, completedAt: null },
   notes: { content: '', category: null, tags: [], pinned: false },
   schedules: { description: null, location: null, endTime: null },
-  reminders: { sent: false, taskId: null },
+  reminders: { sent: false, recurrence: 'NONE', taskId: null },
   users: { name: null },
 };
 

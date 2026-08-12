@@ -2,6 +2,7 @@
 
 const prisma = require('../models/prisma');
 const { emitToUser } = require('../realtime');
+const { nextOccurrence } = require('../utils/recurrence');
 
 let timer = null;
 
@@ -31,6 +32,21 @@ async function tick() {
     });
     try {
       await prisma.reminder.update({ where: { id: reminder.id }, data: { sent: true } });
+      // Recurring reminder: chain the next occurrence as a fresh unsent row so
+      // the persistent scheduler keeps firing it on future ticks.
+      const next = nextOccurrence(reminder.remindAt, reminder.recurrence);
+      if (next) {
+        await prisma.reminder.create({
+          data: {
+            userId: reminder.userId,
+            message: reminder.message,
+            remindAt: next,
+            recurrence: reminder.recurrence,
+            taskId: reminder.taskId ?? null,
+            sent: false,
+          },
+        });
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[scheduler] mark-sent failed for ${reminder.id}: ${err.message}`);

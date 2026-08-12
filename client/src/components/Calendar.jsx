@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 
 const typeVariant = { task: 'medium', schedule: 'default', reminder: 'secondary' };
+const RECURRENCES = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
 
 function groupByDay(events) {
   const groups = {};
@@ -24,7 +25,7 @@ export default function Calendar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ title: '', startTime: '' });
-  const [reminder, setReminder] = useState({ message: '', remindAt: '' });
+  const [reminder, setReminder] = useState({ message: '', remindAt: '', recurrence: 'NONE' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,8 +59,10 @@ export default function Calendar() {
     e.preventDefault();
     if (!reminder.message.trim() || !reminder.remindAt) return;
     try {
-      await reminderService.create({ message: reminder.message, remindAt: new Date(reminder.remindAt).toISOString() });
-      setReminder({ message: '', remindAt: '' });
+      const payload = { message: reminder.message, remindAt: new Date(reminder.remindAt).toISOString() };
+      if (reminder.recurrence !== 'NONE') payload.recurrence = reminder.recurrence;
+      await reminderService.create(payload);
+      setReminder({ message: '', remindAt: '', recurrence: 'NONE' });
       load();
     } catch (err) {
       setError(apiError(err, 'Failed to add reminder'));
@@ -102,6 +105,18 @@ export default function Calendar() {
               value={reminder.remindAt}
               onChange={(e) => setReminder({ ...reminder, remindAt: e.target.value })}
             />
+            <select
+              value={reminder.recurrence}
+              onChange={(e) => setReminder({ ...reminder, recurrence: e.target.value })}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              aria-label="Repeat"
+            >
+              {RECURRENCES.map((r) => (
+                <option key={r} value={r}>
+                  {r === 'NONE' ? 'No repeat' : r}
+                </option>
+              ))}
+            </select>
             <Button type="submit" variant="secondary">
               <Plus className="h-4 w-4" /> Remind
             </Button>

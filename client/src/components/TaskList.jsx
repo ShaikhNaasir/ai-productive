@@ -10,6 +10,7 @@ import { cn, formatDate } from '@/lib/utils';
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH'];
 const STATUSES = ['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED'];
+const RECURRENCES = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
 
 function priorityVariant(p) {
   return { HIGH: 'high', MEDIUM: 'medium', LOW: 'low' }[p] || 'secondary';
@@ -25,7 +26,7 @@ export default function TaskList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('ALL');
-  const [form, setForm] = useState({ title: '', priority: 'MEDIUM', dueDate: '' });
+  const [form, setForm] = useState({ title: '', priority: 'MEDIUM', dueDate: '', recurrence: 'NONE' });
   const [aiText, setAiText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -54,8 +55,9 @@ export default function TaskList() {
     try {
       const payload = { title: form.title, priority: form.priority };
       if (form.dueDate) payload.dueDate = form.dueDate;
+      if (form.recurrence !== 'NONE') payload.recurrence = form.recurrence;
       await taskService.create(payload);
-      setForm({ title: '', priority: 'MEDIUM', dueDate: '' });
+      setForm({ title: '', priority: 'MEDIUM', dueDate: '', recurrence: 'NONE' });
       load();
     } catch (err) {
       setError(apiError(err, 'Failed to create task'));
@@ -162,6 +164,18 @@ export default function TaskList() {
           onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
           className="sm:w-40"
         />
+        <select
+          value={form.recurrence}
+          onChange={(e) => setForm({ ...form, recurrence: e.target.value })}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Repeat"
+        >
+          {RECURRENCES.map((r) => (
+            <option key={r} value={r}>
+              {r === 'NONE' ? 'No repeat' : r}
+            </option>
+          ))}
+        </select>
         <Button type="submit">
           <Plus className="h-4 w-4" /> Add
         </Button>
@@ -231,6 +245,9 @@ export default function TaskList() {
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">{task.title}</span>
                     <Badge variant={priorityVariant(task.priority)}>{task.priority}</Badge>
+                    {task.recurrence && task.recurrence !== 'NONE' && (
+                      <Badge variant="secondary">{task.recurrence}</Badge>
+                    )}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {task.status.replace('_', ' ')}

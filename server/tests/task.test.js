@@ -105,4 +105,60 @@ describe('tasks', () => {
       .set({ Authorization: `Bearer ${otherToken}` });
     expect(res.status).toBe(404);
   });
+
+  test('completing a recurring task spawns the next occurrence', async () => {
+    const created = await request(app)
+      .post('/api/tasks')
+      .set(auth())
+      .send({ title: 'weekly standup', recurrence: 'weekly', dueDate: '2026-08-12' });
+    expect(created.body.task.recurrence).toBe('WEEKLY');
+    const id = created.body.task.id;
+
+    await request(app).post(`/api/tasks/${id}/complete`).set(auth());
+
+    const list = await request(app).get('/api/tasks').set(auth());
+    const sameTitle = list.body.tasks.filter((t) => t.title === 'weekly standup');
+    expect(sameTitle.length).toBe(2);
+    const spawned = sameTitle.find((t) => t.status === 'PENDING');
+    expect(spawned).toBeTruthy();
+    expect(spawned.recurrence).toBe('WEEKLY');
+    expect(new Date(spawned.dueDate).toISOString()).toBe('2026-08-19T00:00:00.000Z');
+  });
+
+  test('completing a non-recurring task does not spawn', async () => {
+    const created = await request(app)
+      .post('/api/tasks')
+      .set(auth())
+      .send({ title: 'one off', dueDate: '2026-08-12' });
+    const id = created.body.task.id;
+    await request(app).post(`/api/tasks/${id}/complete`).set(auth());
+    const list = await request(app).get('/api/tasks').set(auth());
+    expect(list.body.tasks.filter((t) => t.title === 'one off').length).toBe(1);
+  });
+
+  test('completing a recurring task twice does not double-spawn', async () => {
+    const created = await request(app)
+      .post('/api/tasks')
+      .set(auth())
+      .send({ title: 'daily dedupe', recurrence: 'daily', dueDate: '2026-08-12' });
+    const id = created.body.task.id;
+    await request(app).post(`/api/tasks/${id}/complete`).set(auth());
+    await request(app).post(`/api/tasks/${id}/complete`).set(auth());
+    const list = await request(app).get('/api/tasks').set(auth());
+    expect(list.body.tasks.filter((t) => t.title === 'daily dedupe').length).toBe(2);
+  });
+
+  test('recurring task spawned via PATCH status=COMPLETED', async () => {
+    const created = await request(app)
+      .post('/api/tasks')
+      .set(auth())
+      .send({ title: 'patch recur', recurrence: 'daily', dueDate: '2026-08-12' });
+    const id = created.body.task.id;
+    await request(app).patch(`/api/tasks/${id}`).set(auth()).send({ status: 'COMPLETED' });
+    const list = await request(app).get('/api/tasks').set(auth());
+    const sameTitle = list.body.tasks.filter((t) => t.title === 'patch recur');
+    expect(sameTitle.length).toBe(2);
+    const spawned = sameTitle.find((t) => t.status === 'PENDING');
+    expect(new Date(spawned.dueDate).toISOString()).toBe('2026-08-13T00:00:00.000Z');
+  });
 });

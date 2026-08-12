@@ -25,6 +25,13 @@ enum TaskStatus {
   COMPLETED
 }
 
+enum Recurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -48,6 +55,7 @@ model Task {
   description String?
   priority    Priority   @default(MEDIUM)
   status      TaskStatus @default(PENDING)
+  recurrence  Recurrence @default(NONE)
   dueDate     DateTime?
   tags        String[]   @default([])
   completedAt DateTime?
@@ -103,11 +111,12 @@ model Schedule {
 
 model Reminder {
   id        String   @id @default(uuid())
-  userId    String
-  message   String
-  remindAt  DateTime
-  sent      Boolean  @default(false)
-  taskId    String?
+  userId     String
+  message    String
+  remindAt   DateTime
+  sent       Boolean    @default(false)
+  recurrence Recurrence @default(NONE)
+  taskId     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
