@@ -18,7 +18,8 @@ function setTaskChangeHook(fn) {
 async function list(req, res) {
   const q = listTaskQuerySchema.parse(req.query);
 
-  const where = { userId: req.user.id };
+  // Only top-level tasks appear in the list; their subtasks nest underneath.
+  const where = { userId: req.user.id, parentId: null };
   if (q.status) where.status = q.status;
   if (q.priority) where.priority = q.priority;
   if (q.tag) where.tags = { has: q.tag };
@@ -32,6 +33,7 @@ async function list(req, res) {
   const tasks = await prisma.task.findMany({
     where,
     orderBy: { [q.sort]: q.order },
+    include: { subtasks: { orderBy: { createdAt: 'asc' } } },
   });
   res.json({ tasks });
 }
@@ -40,6 +42,14 @@ async function getOwnedTask(userId, id) {
   const task = await prisma.task.findFirst({ where: { id, userId } });
   if (!task) throw ApiError.notFound('Task not found');
   return task;
+}
+
+// Validate an optional parentId belongs to the current user and is itself a
+// top-level task (subtasks are one level deep). Returns nothing; throws on error.
+async function assertValidParent(userId, parentId) {
+  if (!parentId) return;
+  const parent = await getOwnedTask(userId, parentId);
+  if (parent.parentId) throw ApiError.badRequest('Cannot nest a subtask under a subtask');
 }
 
 // When a recurring task is completed, spawn the next occurrence as a fresh
@@ -65,12 +75,17 @@ async function maybeSpawnRecurrence(prior) {
 }
 
 async function getOne(req, res) {
-  const task = await getOwnedTask(req.user.id, req.params.id);
+  await getOwnedTask(req.user.id, req.params.id);
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id, userId: req.user.id },
+    include: { subtasks: { orderBy: { createdAt: 'asc' } } },
+  });
   res.json({ task });
 }
 
 async function create(req, res) {
   const data = createTaskSchema.parse(req.body);
+  await assertValidParent(req.user.id, data.parentId);
   const task = await prisma.task.create({
     data: {
       ...data,

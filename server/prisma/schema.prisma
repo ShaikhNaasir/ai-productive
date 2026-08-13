@@ -59,16 +59,22 @@ model Task {
   dueDate     DateTime?
   tags        String[]   @default([])
   completedAt DateTime?
+  // Subtasks (Roadmap A1): self-relation. A subtask points at its parent; deleting
+  // a parent cascades to its subtasks.
+  parentId    String?
   // Semantic search embedding (Phase 10). 1024 dims = Voyage-3.
   embedding   Unsupported("vector(1024)")?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent      Task?      @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks    Task[]     @relation("Subtasks")
 
   @@index([userId])
   @@index([status])
   @@index([dueDate])
+  @@index([parentId])
   @@map("tasks")
 }
 

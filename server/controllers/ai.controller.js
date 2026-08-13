@@ -16,6 +16,10 @@ const chatSchema = z.object({
   message: z.string().trim().min(1),
   history: z.array(z.object({ role: z.string(), content: z.string() })).optional(),
 });
+// AI breakdown output is validated before persisting subtasks.
+const breakdownSchema = z.object({
+  subtasks: z.array(z.string().trim().min(1).max(300)).max(7),
+});
 
 // Parse a natural-language instruction into a structured task (no persistence).
 async function parseTask(req, res) {
@@ -40,6 +44,31 @@ async function createTaskFromText(req, res) {
     },
   });
   res.status(201).json({ task, parsed });
+}
+
+// Break one task into AI-generated subtasks and persist them as child tasks.
+async function breakdownTask(req, res) {
+  const task = await prisma.task.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+  if (!task) throw ApiError.notFound('Task not found');
+  if (task.parentId) throw ApiError.badRequest('Cannot break down a subtask');
+
+  const result = await aiClient.breakdown(
+    task.title,
+    task.description || null,
+    new Date().toISOString()
+  );
+
+  // Schema-validate the AI output before any DB write (invariant).
+  const titles = breakdownSchema.parse(result).subtasks;
+
+  const subtasks = [];
+  for (const title of titles) {
+    const created = await prisma.task.create({
+      data: { userId: req.user.id, parentId: task.id, title, priority: task.priority },
+    });
+    subtasks.push(created);
+  }
+  res.status(201).json({ task, subtasks });
 }
 
 async function summarize(req, res) {
@@ -119,4 +148,4 @@ async function reindex(req, res) {
   res.json({ indexed: tasks.length + notes.length });
 }
 
-module.exports = { parseTask, createTaskFromText, summarize, prioritize, chat, reindex };
+module.exports = { parseTask, createTaskFromText, breakdownTask, summarize, prioritize, chat, reindex };

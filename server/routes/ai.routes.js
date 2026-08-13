@@ -11,6 +11,7 @@ router.use(requireAuth);
 
 router.post('/parse-task', asyncHandler(ctrl.parseTask));
 router.post('/tasks', asyncHandler(ctrl.createTaskFromText));
+router.post('/tasks/:id/breakdown', asyncHandler(ctrl.breakdownTask));
 router.post('/summarize', asyncHandler(ctrl.summarize));
 router.post('/prioritize', asyncHandler(ctrl.prioritize));
 router.post('/chat', asyncHandler(ctrl.chat));

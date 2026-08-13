@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Trash2, Check, Plus, Sparkles, Pencil, X, Save } from 'lucide-react';
+import { Trash2, Check, Plus, Sparkles, Pencil, X, Save, ListTree, ChevronRight, ChevronDown } from 'lucide-react';
 import { taskService } from '@/services/taskService';
 import { aiService } from '@/services/aiService';
 import { apiError } from '@/lib/api';
@@ -31,6 +31,8 @@ export default function TaskList() {
   const [aiLoading, setAiLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ title: '', priority: 'MEDIUM', dueDate: '' });
+  const [expanded, setExpanded] = useState(() => new Set());
+  const [breakingId, setBreakingId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,6 +125,39 @@ export default function TaskList() {
       setTasks((t) => t.filter((x) => x.id !== id));
     } catch (err) {
       setError(apiError(err, 'Failed to delete task'));
+    }
+  };
+
+  const removeSubtask = async (id) => {
+    if (!window.confirm('Delete this subtask?')) return;
+    try {
+      await taskService.remove(id);
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Failed to delete subtask'));
+    }
+  };
+
+  const toggleExpand = (id) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const breakDown = async (id) => {
+    setBreakingId(id);
+    setError('');
+    try {
+      await aiService.breakdown(id);
+      setExpanded((prev) => new Set(prev).add(id));
+      await load();
+    } catch (err) {
+      setError(apiError(err, 'AI breakdown failed'));
+    } finally {
+      setBreakingId(null);
     }
   };
 
@@ -237,47 +272,95 @@ export default function TaskList() {
                 </div>
               </li>
             ) : (
-              <li
-                key={task.id}
-                className={cn('task-card flex items-center justify-between gap-4', task.status === 'COMPLETED' && 'completed')}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">{task.title}</span>
-                    <Badge variant={priorityVariant(task.priority)}>{task.priority}</Badge>
-                    {task.recurrence && task.recurrence !== 'NONE' && (
-                      <Badge variant="secondary">{task.recurrence}</Badge>
+              <li key={task.id} className={cn('task-card', task.status === 'COMPLETED' && 'completed')}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {task.subtasks?.length ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(task.id)}
+                        className="shrink-0 text-muted-foreground"
+                        aria-label={expanded.has(task.id) ? 'Collapse subtasks' : 'Expand subtasks'}
+                      >
+                        {expanded.has(task.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </button>
+                    ) : (
+                      <span className="inline-block w-4 shrink-0" />
                     )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{task.title}</span>
+                        <Badge variant={priorityVariant(task.priority)}>{task.priority}</Badge>
+                        {task.recurrence && task.recurrence !== 'NONE' && (
+                          <Badge variant="secondary">{task.recurrence}</Badge>
+                        )}
+                        {task.subtasks?.length ? (
+                          <Badge variant="secondary">{task.subtasks.length} subtasks</Badge>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {task.status.replace('_', ' ')}
+                        {task.dueDate ? ` · due ${formatDate(task.dueDate)}` : ''}
+                        {task.tags?.length ? ` · ${task.tags.join(', ')}` : ''}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {task.status.replace('_', ' ')}
-                    {task.dueDate ? ` · due ${formatDate(task.dueDate)}` : ''}
-                    {task.tags?.length ? ` · ${task.tags.join(', ')}` : ''}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <select
-                    value={task.status}
-                    onChange={(e) => updateStatus(task.id, e.target.value)}
-                    className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-                    aria-label="Task status"
-                  >
-                    <option value="PENDING">Pending</option>
-                    <option value="IN_PROGRESS">In Progress</option>
-                    <option value="COMPLETED">Completed</option>
-                  </select>
-                  {task.status !== 'COMPLETED' && (
-                    <Button size="icon" variant="ghost" onClick={() => complete(task.id)} aria-label="Mark complete">
-                      <Check className="h-4 w-4" />
+                  <div className="flex shrink-0 items-center gap-1">
+                    <select
+                      value={task.status}
+                      onChange={(e) => updateStatus(task.id, e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+                      aria-label="Task status"
+                    >
+                      <option value="PENDING">Pending</option>
+                      <option value="IN_PROGRESS">In Progress</option>
+                      <option value="COMPLETED">Completed</option>
+                    </select>
+                    {task.status !== 'COMPLETED' && (
+                      <Button size="icon" variant="ghost" onClick={() => complete(task.id)} aria-label="Mark complete">
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => breakDown(task.id)}
+                      disabled={breakingId === task.id}
+                      aria-label="AI Break Down"
+                      title="AI Break Down"
+                    >
+                      <ListTree className="h-4 w-4" />
                     </Button>
-                  )}
-                  <Button size="icon" variant="ghost" onClick={() => startEdit(task)} aria-label="Edit">
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => remove(task.id)} aria-label="Delete">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                    <Button size="icon" variant="ghost" onClick={() => startEdit(task)} aria-label="Edit">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => remove(task.id)} aria-label="Delete">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
+                {task.subtasks?.length && expanded.has(task.id) ? (
+                  <ul className="mt-2 space-y-1 border-l border-border pl-6">
+                    {task.subtasks.map((sub) => (
+                      <li
+                        key={sub.id}
+                        className={cn('flex items-center justify-between gap-2 text-sm', sub.status === 'COMPLETED' && 'completed')}
+                      >
+                        <span className="truncate">{sub.title}</span>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {sub.status !== 'COMPLETED' && (
+                            <Button size="icon" variant="ghost" onClick={() => complete(sub.id)} aria-label="Complete subtask">
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button size="icon" variant="ghost" onClick={() => removeSubtask(sub.id)} aria-label="Delete subtask">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             )
           )}

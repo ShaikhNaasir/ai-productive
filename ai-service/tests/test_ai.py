@@ -75,6 +75,31 @@ def test_parse_task_invalid_json(monkeypatch):
     assert res.status_code == 502
 
 
+def test_breakdown_ok(monkeypatch):
+    monkeypatch.setattr(
+        task_planner,
+        "complete_json",
+        lambda **kwargs: {"subtasks": ["Outline", "Draft", "  ", "Publish"]},
+    )
+    res = client.post(
+        "/breakdown",
+        json={"title": "Write a blog post", "description": "on productivity"},
+        headers=KEY,
+    )
+    assert res.status_code == 200
+    # Blank entries are dropped; order preserved.
+    assert res.json()["subtasks"] == ["Outline", "Draft", "Publish"]
+
+
+def test_breakdown_invalid_json(monkeypatch):
+    def boom(**kwargs):
+        raise ValueError("Model did not return valid JSON")
+
+    monkeypatch.setattr(task_planner, "complete_json", boom)
+    res = client.post("/breakdown", json={"title": "do a thing"}, headers=KEY)
+    assert res.status_code == 502
+
+
 def test_prioritize_ok(monkeypatch):
     monkeypatch.setattr(
         task_planner,

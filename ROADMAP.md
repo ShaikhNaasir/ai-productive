@@ -10,12 +10,14 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 
 ## Tier A — high value, no external accounts needed
 
-### A1 — Subtasks / AI task breakdown
-- [ ] Prisma: add `parentId` self-relation to `Task` (nullable, indexed, cascade on parent delete).
-- [ ] Server: nest subtasks in task read; guard against cross-user parent; validation.
-- [ ] AI service: `/breakdown` — turn one task into an ordered list of validated subtasks.
-- [ ] Client: expand/collapse subtasks under a task; "AI Break Down" action in `TaskList.jsx`.
-- [ ] Tests: server (Jest) + ai-service (pytest) + client (Vitest).
+### A1 — Subtasks / AI task breakdown ✅
+- [x] Prisma: `parentId` self-relation on `Task` (nullable, indexed, `onDelete: Cascade`).
+- [x] Server: list nests subtasks (top-level only), `getOne` includes them; create guards a user-owned, one-level-deep parent; `parentId` in validator.
+- [x] AI service: `/breakdown` — task → 3–7 ordered validated subtasks (`task_planner.breakdown`).
+- [x] Server: `POST /api/ai/tasks/:id/breakdown` — schema-validates AI output before persisting child tasks.
+- [x] Client: expand/collapse subtasks + "AI Break Down" action in `TaskList.jsx`; subtask-count badge.
+- [x] Tests: server task (3) + ai breakdown (2) + `fakePrisma` include/cascade support; ai-service (2); client (1). Server 61 green, ai-service 11 green, client green, lint clean, build OK.
+- [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).
 
 ### A2 — Recurring tasks & reminders ✅
 - [x] Prisma: `Recurrence` enum (`NONE|DAILY|WEEKLY|MONTHLY`) + field on `Task` and `Reminder`.

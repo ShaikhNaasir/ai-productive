@@ -12,6 +12,8 @@ from schemas import (
     SummarizeResponse,
     ParseTaskRequest,
     ParsedTask,
+    BreakdownRequest,
+    BreakdownResponse,
     PrioritizeRequest,
     PrioritizeResponse,
     ChatRequest,
@@ -64,6 +66,11 @@ def summarize_endpoint(req: SummarizeRequest, _=Depends(require_internal_key)):
 @app.post("/parse-task", response_model=ParsedTask)
 def parse_task_endpoint(req: ParseTaskRequest, _=Depends(require_internal_key)):
     return _guard(task_planner.parse_task, req.text, req.now)
+
+
+@app.post("/breakdown", response_model=BreakdownResponse)
+def breakdown_endpoint(req: BreakdownRequest, _=Depends(require_internal_key)):
+    return _guard(task_planner.breakdown, req.title, req.description, req.now)
 
 
 @app.post("/prioritize", response_model=PrioritizeResponse)

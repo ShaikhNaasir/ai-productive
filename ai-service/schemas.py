@@ -52,6 +52,16 @@ class PrioritizeResponse(BaseModel):
     recommendations: list[PriorityRecommendation]
 
 
+class BreakdownRequest(BaseModel):
+    title: str = Field(min_length=1)
+    description: Optional[str] = None
+    now: Optional[str] = None
+
+
+class BreakdownResponse(BaseModel):
+    subtasks: list[str]
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     context: dict[str, Any] = {}

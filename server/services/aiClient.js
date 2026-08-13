@@ -30,6 +30,7 @@ async function call(path, body) {
 const aiClient = {
   summarize: (text) => call('/summarize', { text }),
   parseTask: (text, now) => call('/parse-task', { text, now }),
+  breakdown: (title, description, now) => call('/breakdown', { title, description, now }),
   prioritize: (tasks, now) => call('/prioritize', { tasks, now }),
   chat: (message, context, history) => call('/chat', { message, context, history }),
   embed: (input) => call('/embed', { input }),

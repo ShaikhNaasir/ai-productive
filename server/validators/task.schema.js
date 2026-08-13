@@ -16,6 +16,7 @@ const createTaskSchema = z.object({
   recurrence: recurrence.optional(),
   dueDate: z.coerce.date().optional().nullable(),
   tags: z.array(z.string().trim().min(1)).max(50).optional(),
+  parentId: z.string().min(1).optional().nullable(),
 });
 
 const updateTaskSchema = createTaskSchema.partial().refine(

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from llm import complete_json
 from schemas import (
+    BreakdownResponse,
     ParsedTask,
     PrioritizeResponse,
     PriorityRecommendation,
@@ -17,6 +18,14 @@ PARSE_SYSTEM = (
     '{"title": string, "description": string|null, "priority": "LOW"|"MEDIUM"|"HIGH", '
     '"dueDate": ISO-8601 string|null, "tags": string[]}. '
     "Infer a sensible priority. Keep the title short and imperative."
+)
+
+BREAKDOWN_SYSTEM = (
+    "You break a single task into an ordered list of concrete, actionable subtasks. "
+    "Produce between 3 and 7 subtasks, ordered by the sequence they should be done in. "
+    "Each subtask is a short imperative phrase; do not restate the parent task. "
+    "Respond ONLY with JSON of this shape: "
+    '{"subtasks": string[]}.'
 )
 
 PRIORITIZE_SYSTEM = (
@@ -47,6 +56,18 @@ def parse_task(text: str, now: str | None = None) -> ParsedTask:
         dueDate=(data.get("dueDate") or None),
         tags=[str(t) for t in data.get("tags", []) if str(t).strip()],
     )
+
+
+def breakdown(title: str, description: str | None = None, now: str | None = None) -> BreakdownResponse:
+    system = f"{BREAKDOWN_SYSTEM}\nCurrent date-time (ISO 8601): {_now_iso(now)}"
+    user = title if not description else f"{title}\n\n{description}"
+    data = complete_json(system=system, user=user, max_tokens=600)
+    subtasks = []
+    for s in data.get("subtasks", []):
+        text = str(s).strip()[:300]
+        if text:
+            subtasks.append(text)
+    return BreakdownResponse(subtasks=subtasks[:7])
 
 
 def prioritize(tasks: list[TaskForPrioritization], now: str | None = None) -> PrioritizeResponse:

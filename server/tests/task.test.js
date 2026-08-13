@@ -148,6 +148,44 @@ describe('tasks', () => {
     expect(list.body.tasks.filter((t) => t.title === 'daily dedupe').length).toBe(2);
   });
 
+  test('create a subtask under a parent; parent nests it, subtask hidden at top level', async () => {
+    const parent = await request(app).post('/api/tasks').set(auth()).send({ title: 'ship feature' });
+    const parentId = parent.body.task.id;
+
+    const sub = await request(app)
+      .post('/api/tasks')
+      .set(auth())
+      .send({ title: 'write tests', parentId });
+    expect(sub.status).toBe(201);
+    expect(sub.body.task.parentId).toBe(parentId);
+
+    const list = await request(app).get('/api/tasks').set(auth());
+    const top = list.body.tasks.find((t) => t.id === parentId);
+    expect(top.subtasks.map((s) => s.title)).toContain('write tests');
+    // The subtask itself does not appear as a top-level row.
+    expect(list.body.tasks.some((t) => t.id === sub.body.task.id)).toBe(false);
+  });
+
+  test('reject a subtask under a non-existent / other-user parent', async () => {
+    const res = await request(app)
+      .post('/api/tasks')
+      .set(auth())
+      .send({ title: 'orphan', parentId: '11111111-1111-1111-1111-111111111111' });
+    expect(res.status).toBe(404);
+  });
+
+  test('deleting a parent cascades to its subtasks', async () => {
+    const parent = await request(app).post('/api/tasks').set(auth()).send({ title: 'cascade parent' });
+    const parentId = parent.body.task.id;
+    const sub = await request(app).post('/api/tasks').set(auth()).send({ title: 'child', parentId });
+    const subId = sub.body.task.id;
+
+    await request(app).delete(`/api/tasks/${parentId}`).set(auth());
+
+    const gone = await request(app).get(`/api/tasks/${subId}`).set(auth());
+    expect(gone.status).toBe(404);
+  });
+
   test('recurring task spawned via PATCH status=COMPLETED', async () => {
     const created = await request(app)
       .post('/api/tasks')

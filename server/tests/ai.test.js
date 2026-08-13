@@ -7,6 +7,7 @@ jest.mock('../models/prisma', () => {
 
 jest.mock('../services/aiClient', () => ({
   parseTask: jest.fn(),
+  breakdown: jest.fn(),
   summarize: jest.fn(),
   prioritize: jest.fn(),
   chat: jest.fn(),
@@ -53,6 +54,30 @@ describe('AI wiring', () => {
     // Confirm it now appears in the task list
     const list = await request(app).get('/api/tasks').set(auth());
     expect(list.body.tasks.some((t) => t.title === 'Call dentist')).toBe(true);
+  });
+
+  test('breakdown persists AI subtasks under the parent task', async () => {
+    const parent = await request(app).post('/api/tasks').set(auth()).send({ title: 'Launch blog' });
+    const parentId = parent.body.task.id;
+
+    aiClient.breakdown.mockResolvedValue({ subtasks: ['Draft outline', 'Write post', 'Publish'] });
+    const res = await request(app).post(`/api/ai/tasks/${parentId}/breakdown`).set(auth());
+    expect(res.status).toBe(201);
+    expect(res.body.subtasks.map((s) => s.title)).toEqual(['Draft outline', 'Write post', 'Publish']);
+    expect(res.body.subtasks.every((s) => s.parentId === parentId)).toBe(true);
+
+    // They surface nested under the parent in the task list.
+    const list = await request(app).get('/api/tasks').set(auth());
+    const top = list.body.tasks.find((t) => t.id === parentId);
+    expect(top.subtasks.length).toBe(3);
+  });
+
+  test('breakdown returns 503 when AI service is down', async () => {
+    const ApiError = require('../utils/ApiError');
+    const parent = await request(app).post('/api/tasks').set(auth()).send({ title: 'Down task' });
+    aiClient.breakdown.mockRejectedValue(new ApiError(503, 'AI service is unavailable.'));
+    const res = await request(app).post(`/api/ai/tasks/${parent.body.task.id}/breakdown`).set(auth());
+    expect(res.status).toBe(503);
   });
 
   test('summarize by text', async () => {

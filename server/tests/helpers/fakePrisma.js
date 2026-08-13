@@ -7,7 +7,7 @@ let counter = 1;
 const nextId = () => String(counter++);
 
 const modelDefaults = {
-  tasks: { priority: 'MEDIUM', status: 'PENDING', recurrence: 'NONE', tags: [], description: null, dueDate: null, completedAt: null },
+  tasks: { priority: 'MEDIUM', status: 'PENDING', recurrence: 'NONE', tags: [], description: null, dueDate: null, completedAt: null, parentId: null },
   notes: { content: '', category: null, tags: [], pinned: false },
   schedules: { description: null, location: null, endTime: null },
   reminders: { sent: false, recurrence: 'NONE', taskId: null },
@@ -84,6 +84,26 @@ function applyOrderBy(rows, orderBy) {
   });
 }
 
+// Resolve `include` for the self-relation used by tasks (subtasks/parent). Other
+// relations aren't exercised by the controllers, so only these two are handled.
+function applyInclude(records, include, allRows) {
+  if (!include) return records;
+  return records.map((r) => {
+    const out = { ...r };
+    for (const [rel, opt] of Object.entries(include)) {
+      if (!opt) continue;
+      if (rel === 'subtasks') {
+        let kids = allRows.filter((x) => x.parentId === r.id);
+        if (opt.orderBy) kids = applyOrderBy(kids, opt.orderBy);
+        out.subtasks = kids;
+      } else if (rel === 'parent') {
+        out.parent = allRows.find((x) => x.id === r.parentId) || null;
+      }
+    }
+    return out;
+  });
+}
+
 function makeModel(name) {
   const rows = [];
   const defaults = modelDefaults[name] || {};
@@ -93,10 +113,15 @@ function makeModel(name) {
       const [field, val] = Object.entries(where)[0];
       return rows.find((r) => r[field] === val) || null;
     },
-    findFirst: async ({ where }) => rows.find((r) => matchWhere(r, where)) || null,
-    findMany: async ({ where, orderBy } = {}) => {
+    findFirst: async ({ where, include } = {}) => {
+      const found = rows.find((r) => matchWhere(r, where)) || null;
+      if (!found) return null;
+      return include ? applyInclude([found], include, rows)[0] : found;
+    },
+    findMany: async ({ where, orderBy, include } = {}) => {
       const filtered = rows.filter((r) => matchWhere(r, where));
-      return applyOrderBy(filtered, orderBy);
+      const ordered = applyOrderBy(filtered, orderBy);
+      return applyInclude(ordered, include, rows);
     },
     count: async ({ where } = {}) => rows.filter((r) => matchWhere(r, where)).length,
     create: async ({ data }) => {
@@ -128,7 +153,12 @@ function makeModel(name) {
         err.code = 'P2025';
         throw err;
       }
-      return rows.splice(idx, 1)[0];
+      const [removed] = rows.splice(idx, 1);
+      // Cascade self-relation children (subtasks) as the DB does on parent delete.
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (rows[i].parentId === removed.id) rows.splice(i, 1);
+      }
+      return removed;
     },
     deleteMany: async ({ where } = {}) => {
       const toRemove = rows.filter((r) => matchWhere(r, where));
