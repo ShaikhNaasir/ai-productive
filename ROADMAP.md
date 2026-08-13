@@ -74,5 +74,5 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 ### C2 — Shared / team tasks
 - [ ] Sharing/permission model; invite; shared task views. Larger schema + auth change.
 
-### C3 — AI usage & cost monitoring
-- [ ] Track tokens/cost per AI call; per-user dashboard tile.
+### C3 — AI usage & cost monitoring — skipped
+- [ ] Track tokens/cost per AI call; per-user dashboard tile. _Deferred by owner (2026-08-13) — not needed for now._
