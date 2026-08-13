@@ -24,6 +24,12 @@ const updateTaskSchema = createTaskSchema.partial().refine(
   { message: 'Provide at least one field to update' }
 );
 
+const shareRole = z.preprocess(upper, z.enum(['VIEW', 'EDIT']));
+const shareTaskSchema = z.object({
+  email: z.string().trim().email(),
+  role: shareRole.optional(),
+});
+
 const listTaskQuerySchema = z.object({
   status: status.optional(),
   priority: priority.optional(),
@@ -33,4 +39,4 @@ const listTaskQuerySchema = z.object({
   order: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
-module.exports = { createTaskSchema, updateTaskSchema, listTaskQuerySchema };
+module.exports = { createTaskSchema, updateTaskSchema, listTaskQuerySchema, shareTaskSchema };

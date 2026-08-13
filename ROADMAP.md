@@ -71,8 +71,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 ### C1 — Google Calendar sync
 - [ ] OAuth (Google), two-way sync of schedules. **Blocked:** Google API credentials.
 
-### C2 — Shared / team tasks
-- [ ] Sharing/permission model; invite; shared task views. Larger schema + auth change.
+### C2 — Shared / team tasks (in progress)
+Split into two slices.
+- [x] **C2.1 — Sharing model + backend.** `TaskShare` (VIEW/EDIT, unique per task+user); `services/taskAccess.js` grants owner-or-shared access (subtasks inherit parent shares); endpoints `POST /api/tasks/:id/share`, `GET /:id/shares`, `DELETE /:id/share/:userId`, `GET /api/tasks/shared`; EDIT sharees can update/complete/break down, delete stays owner-only. Server 106 tests green, lint clean. Migration deferred (`db push`).
+- [ ] **C2.2 — Client.** Share dialog (email + role) + "Shared with me" view; respect VIEW (read-only) vs EDIT.
 
 ### C3 — AI usage & cost monitoring — skipped
 - [ ] Track tokens/cost per AI call; per-user dashboard tile. _Deferred by owner (2026-08-13) — not needed for now._

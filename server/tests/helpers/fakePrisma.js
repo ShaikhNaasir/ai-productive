@@ -14,6 +14,7 @@ const modelDefaults = {
   focusSessions: { taskId: null, endedAt: null, seconds: 0 },
   habits: { description: null },
   habitLogs: {},
+  taskShares: { role: 'VIEW' },
   users: { name: null },
 };
 
@@ -181,6 +182,7 @@ function createFakePrisma() {
     focusSession: makeModel('focusSessions'),
     habit: makeModel('habits'),
     habitLog: makeModel('habitLogs'),
+    taskShare: makeModel('taskShares'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},

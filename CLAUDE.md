@@ -19,7 +19,7 @@ schedules, reminders, daily priorities, and AI assistance.
 
 ## Invariants (never break these)
 
-- Every task/note/schedule/reminder row is scoped to `userId`; queries always filter by the authenticated user.
+- Every task/note/schedule/reminder row is scoped to `userId`; queries filter by the authenticated user. Exception: a task may be explicitly shared via `TaskShare`, granting the named user owner-checked view/edit access (see `services/taskAccess.js`). There is never unauthenticated or unauthorized cross-user access.
 - AI output is schema-validated before any DB write.
 - The app degrades gracefully if `ai-service` is unreachable — core CRUD keeps working; search falls back to keyword.
 - Reminders fire via the persistent DB-backed scheduler, not in-memory only.

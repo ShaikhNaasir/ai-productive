@@ -6,6 +6,7 @@ const aiClient = require('../services/aiClient');
 const ApiError = require('../utils/ApiError');
 const config = require('../config/env');
 const embeddingService = require('../services/embeddingService');
+const { getAccessibleTask } = require('../services/taskAccess');
 
 const textSchema = z.object({ text: z.string().trim().min(1) });
 const summarizeSchema = z.object({
@@ -61,8 +62,8 @@ async function createTaskFromText(req, res) {
 
 // Break one task into AI-generated subtasks and persist them as child tasks.
 async function breakdownTask(req, res) {
-  const task = await prisma.task.findFirst({ where: { id: req.params.id, userId: req.user.id } });
-  if (!task) throw ApiError.notFound('Task not found');
+  // Owner or an EDIT-shared user may break a task down.
+  const task = await getAccessibleTask(req.user.id, req.params.id, { edit: true });
   if (task.parentId) throw ApiError.badRequest('Cannot break down a subtask');
 
   const result = await aiClient.breakdown(
@@ -76,8 +77,9 @@ async function breakdownTask(req, res) {
 
   const subtasks = [];
   for (const title of titles) {
+    // Subtasks belong to the task's owner so they nest under the owner's task.
     const created = await prisma.task.create({
-      data: { userId: req.user.id, parentId: task.id, title, priority: task.priority },
+      data: { userId: task.userId, parentId: task.id, title, priority: task.priority },
     });
     subtasks.push(created);
   }

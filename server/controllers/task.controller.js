@@ -3,10 +3,12 @@
 const prisma = require('../models/prisma');
 const ApiError = require('../utils/ApiError');
 const { nextOccurrence } = require('../utils/recurrence');
+const { getOwnedTask, getAccessibleTask } = require('../services/taskAccess');
 const {
   createTaskSchema,
   updateTaskSchema,
   listTaskQuerySchema,
+  shareTaskSchema,
 } = require('../validators/task.schema');
 
 // Hook invoked after a task is created/updated so embeddings can be refreshed (Phase 10).
@@ -36,12 +38,6 @@ async function list(req, res) {
     include: { subtasks: { orderBy: { createdAt: 'asc' } } },
   });
   res.json({ tasks });
-}
-
-async function getOwnedTask(userId, id) {
-  const task = await prisma.task.findFirst({ where: { id, userId } });
-  if (!task) throw ApiError.notFound('Task not found');
-  return task;
 }
 
 // Validate an optional parentId belongs to the current user and is itself a
@@ -75,9 +71,10 @@ async function maybeSpawnRecurrence(prior) {
 }
 
 async function getOne(req, res) {
-  await getOwnedTask(req.user.id, req.params.id);
+  // Owner or a user the task is shared with may view it.
+  await getAccessibleTask(req.user.id, req.params.id);
   const task = await prisma.task.findFirst({
-    where: { id: req.params.id, userId: req.user.id },
+    where: { id: req.params.id },
     include: { subtasks: { orderBy: { createdAt: 'asc' } } },
   });
   res.json({ task });
@@ -100,7 +97,8 @@ async function create(req, res) {
 
 async function update(req, res) {
   const data = updateTaskSchema.parse(req.body);
-  const prior = await getOwnedTask(req.user.id, req.params.id);
+  // Owner or a user with EDIT access may change the task.
+  const prior = await getAccessibleTask(req.user.id, req.params.id, { edit: true });
   // Snapshot the fields we need before the update — the ORM row is re-read after.
   const wasCompleted = prior.status === 'COMPLETED';
   const recurring = { recurrence: prior.recurrence, dueDate: prior.dueDate, userId: prior.userId, title: prior.title, description: prior.description, priority: prior.priority, tags: prior.tags };
@@ -120,7 +118,7 @@ async function update(req, res) {
 }
 
 async function complete(req, res) {
-  const prior = await getOwnedTask(req.user.id, req.params.id);
+  const prior = await getAccessibleTask(req.user.id, req.params.id, { edit: true });
   const wasCompleted = prior.status === 'COMPLETED';
   const recurring = { recurrence: prior.recurrence, dueDate: prior.dueDate, userId: prior.userId, title: prior.title, description: prior.description, priority: prior.priority, tags: prior.tags };
   const task = await prisma.task.update({
@@ -134,9 +132,79 @@ async function complete(req, res) {
 }
 
 async function remove(req, res) {
+  // Only the owner may delete a task.
   await getOwnedTask(req.user.id, req.params.id);
   await prisma.task.delete({ where: { id: req.params.id } });
   res.status(204).send();
 }
 
-module.exports = { list, getOne, create, update, complete, remove, setTaskChangeHook };
+// Tasks shared with the current user, with each task's owner and the caller's role.
+async function listShared(req, res) {
+  const shares = await prisma.taskShare.findMany({ where: { userId: req.user.id } });
+  const tasks = [];
+  for (const s of shares) {
+    const task = await prisma.task.findFirst({
+      where: { id: s.taskId },
+      include: { subtasks: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!task) continue;
+    const owner = await prisma.user.findUnique({ where: { id: task.userId } });
+    tasks.push({
+      ...task,
+      myRole: s.role,
+      owner: owner ? { email: owner.email, name: owner.name } : null,
+    });
+  }
+  res.json({ tasks });
+}
+
+// Share a task with another registered user by email (owner only).
+async function share(req, res) {
+  const { email, role } = shareTaskSchema.parse(req.body);
+  const task = await getOwnedTask(req.user.id, req.params.id);
+  const target = await prisma.user.findUnique({ where: { email } });
+  if (!target) throw ApiError.notFound('No user with that email');
+  if (target.id === req.user.id) throw ApiError.badRequest('You already own this task');
+
+  const existing = await prisma.taskShare.findFirst({ where: { taskId: task.id, userId: target.id } });
+  const shareRow = existing
+    ? await prisma.taskShare.update({ where: { id: existing.id }, data: { role: role || 'VIEW' } })
+    : await prisma.taskShare.create({ data: { taskId: task.id, userId: target.id, role: role || 'VIEW' } });
+
+  res.status(201).json({
+    share: { id: shareRow.id, taskId: task.id, userId: target.id, email: target.email, role: shareRow.role },
+  });
+}
+
+async function listShares(req, res) {
+  const task = await getOwnedTask(req.user.id, req.params.id);
+  const shares = await prisma.taskShare.findMany({ where: { taskId: task.id } });
+  const withEmail = await Promise.all(
+    shares.map(async (s) => {
+      const u = await prisma.user.findUnique({ where: { id: s.userId } });
+      return { id: s.id, userId: s.userId, email: u?.email, role: s.role };
+    })
+  );
+  res.json({ shares: withEmail });
+}
+
+async function unshare(req, res) {
+  const task = await getOwnedTask(req.user.id, req.params.id);
+  const existing = await prisma.taskShare.findFirst({ where: { taskId: task.id, userId: req.params.userId } });
+  if (existing) await prisma.taskShare.delete({ where: { id: existing.id } });
+  res.status(204).send();
+}
+
+module.exports = {
+  list,
+  getOne,
+  create,
+  update,
+  complete,
+  remove,
+  listShared,
+  share,
+  listShares,
+  unshare,
+  setTaskChangeHook,
+};

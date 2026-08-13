@@ -32,6 +32,11 @@ enum Recurrence {
   MONTHLY
 }
 
+enum ShareRole {
+  VIEW
+  EDIT
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -47,6 +52,7 @@ model User {
   focusSessions FocusSession[]
   habits        Habit[]
   habitLogs     HabitLog[]
+  taskShares    TaskShare[]
 
   @@map("users")
 }
@@ -74,12 +80,30 @@ model Task {
   parent      Task?      @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
   subtasks    Task[]     @relation("Subtasks")
   focusSessions FocusSession[]
+  shares      TaskShare[]
 
   @@index([userId])
   @@index([status])
   @@index([dueDate])
   @@index([parentId])
   @@map("tasks")
+}
+
+// Task sharing (Roadmap C2). Grants another user view or edit access to a task.
+// Unique per (task, user); deleting either side removes the share.
+model TaskShare {
+  id        String    @id @default(uuid())
+  taskId    String
+  userId    String
+  role      ShareRole @default(VIEW)
+  createdAt DateTime  @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+  @@map("task_shares")
 }
 
 model Note {

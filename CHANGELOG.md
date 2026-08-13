@@ -10,6 +10,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Shared tasks — backend (Roadmap C2.1).** New `TaskShare` model (VIEW/EDIT
+  role, unique per task+user) lets an owner share a task with another registered
+  user by email. `services/taskAccess.js` centralizes authorization: a user may
+  act on a task they own or that is shared with them, and subtasks inherit their
+  parent's shares. Endpoints: `POST /api/tasks/:id/share`, `GET /:id/shares`,
+  `DELETE /:id/share/:userId`, and `GET /api/tasks/shared`. EDIT sharees can
+  update, complete, and break down a task; deleting stays owner-only. Client UI
+  (share dialog + "Shared with me" view) follows in C2.2.
+
 - **Voice command capture (Roadmap B4).** A `VoiceInput` mic button in the Task
   "AI Add" form uses the Web Speech API to transcribe a spoken phrase into the
   natural-language task box, feeding the existing AI task creation. It renders
