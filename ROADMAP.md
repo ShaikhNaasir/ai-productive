@@ -8,6 +8,32 @@ and approved.
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 
+## Current status (resume here) — updated 2026-08-13
+
+**Shipped & pushed to `main`** (latest deploy commit `31c5416`): all of **Tier A
+(A1–A4)**, **Tier B (B1–B4)**, **C2**, **C3**, plus **multi-provider LLM**
+(Anthropic / OpenAI / Gemini — bring any one key). Every suite green:
+server (Jest), ai-service (pytest), client (Vitest) + build; lint clean.
+
+**Only remaining backlog item: `C1 — Google Calendar sync` — BLOCKED** on the
+owner providing Google OAuth credentials (client ID/secret + consent screen).
+Nothing else is pending.
+
+**Deploy / ops notes:**
+- Render applies schema via `prisma db push` (`render.yaml`), so all deferred
+  `[~]` migrations (Task.parentId, focus_sessions, habits/habit_logs,
+  task_shares, ai_usage) apply automatically on deploy — no migration files.
+- Render env (productivity-ai): set **any one** of `ANTHROPIC_API_KEY` /
+  `OPENAI_API_KEY` / `GEMINI_API_KEY`; optional `LLM_PROVIDER` (default `auto`).
+  These are `sync: false` placeholders in `render.yaml` — add real values in the
+  dashboard and Manual Sync / redeploy (blueprint env changes are not auto-applied
+  to a running service). Confirm via `GET /health` → `provider`.
+- `VOYAGE_API_KEY` optional (semantic search); without it, search falls back to
+  keyword. Embeddings are Voyage-only (DB vector column is 1024-dim).
+
+**Where things live:** product spec `README.md`, phased base log `PLAN.md`,
+change history `CHANGELOG.md`, agent rules `CLAUDE.md`.
+
 ## Tier A — high value, no external accounts needed
 
 ### A1 — Subtasks / AI task breakdown ✅
