@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Trash2, Check, Plus, Sparkles, Pencil, X, Save, ListTree, ChevronRight, ChevronDown } from 'lucide-react';
 import { taskService } from '@/services/taskService';
 import { aiService } from '@/services/aiService';
+import VoiceInput from '@/components/VoiceInput';
 import { apiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -170,6 +171,7 @@ export default function TaskList() {
           onChange={(e) => setAiText(e.target.value)}
           className="flex-1"
         />
+        <VoiceInput onResult={setAiText} disabled={aiLoading} />
         <Button type="submit" variant="secondary" disabled={aiLoading}>
           <Sparkles className="h-4 w-4" /> {aiLoading ? 'Thinking…' : 'AI Add'}
         </Button>

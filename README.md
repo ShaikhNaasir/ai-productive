@@ -35,6 +35,7 @@ backlog.
 | Document upload & AI summarization (B1) | Upload .txt/.md/.csv/.pdf → stored as a note + AI key points/summary | `POST /api/documents/upload` |
 | Habit tracking (B2) | Daily habits with idempotent check-in, current + longest streaks, analytics tile | `GET/POST /api/habits`, `POST /api/habits/:id/check-in` |
 | PWA — installable + offline shell (B3) | Installable app, offline app shell; service worker never caches API/private data | client `manifest.webmanifest` + `sw.js` |
+| Voice command capture (B4) | Speak a task in the "AI Add" box (Web Speech API); graceful fallback where unsupported | client `VoiceInput` → `POST /api/ai/tasks` |
 
 ## 🛠 Technologies Used
 

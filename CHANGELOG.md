@@ -10,6 +10,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Voice command capture (Roadmap B4).** A `VoiceInput` mic button in the Task
+  "AI Add" form uses the Web Speech API to transcribe a spoken phrase into the
+  natural-language task box, feeding the existing AI task creation. It renders
+  nothing where speech recognition is unsupported (graceful fallback) and
+  supports the `webkit`-prefixed API.
+
 - **Progressive Web App (Roadmap B3).** The client is now installable and works
   offline as an app shell: a web manifest + SVG icon, a hand-rolled service
   worker (`public/sw.js`) that precaches the shell, serves navigations

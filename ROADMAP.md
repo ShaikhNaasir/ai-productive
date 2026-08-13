@@ -61,10 +61,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 - [x] Cache-safe with auth: the SW ignores cross-origin **and** `/api` requests, so no private/API data is ever cached — only the static shell.
 - [x] Tests: `registerSW.test.js` (2) + `installPrompt.test.jsx` (2); `npm run build` copies `manifest`/`sw`/`icon` into `dist`. Client 14 green, lint clean, build OK.
 
-### B4 — Voice command capture
-- [ ] Client: Web Speech API mic input feeding existing NL task creation.
-- [ ] Graceful fallback where unsupported.
-- [ ] Tests: component + fallback.
+### B4 — Voice command capture ✅
+- [x] Client: `VoiceInput` mic button (Web Speech API) in the Task "AI Add" form — a spoken phrase fills the NL task box for the existing AI task creation.
+- [x] Graceful fallback: renders nothing where speech recognition is unsupported.
+- [x] Tests: `voiceInput.test.jsx` (3 — supported/transcript, unsupported fallback, webkit-prefixed API). Client 17 green, lint clean, build OK.
 
 ## Tier C — needs external accounts / larger scope
 
