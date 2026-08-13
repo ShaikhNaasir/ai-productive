@@ -58,10 +58,23 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      # LLM provider — configure ANY ONE of the three keys below. LLM_PROVIDER
+      # "auto" picks anthropic > openai > gemini by whichever key is set; or
+      # force one ("anthropic" | "openai" | "gemini").
+      - key: LLM_PROVIDER
+        value: auto
       - key: ANTHROPIC_API_KEY
         sync: false          # set this in the Render dashboard
       - key: ANTHROPIC_MODEL
         value: claude-opus-4-8
+      - key: OPENAI_API_KEY
+        sync: false          # optional alternative provider
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: GEMINI_API_KEY
+        sync: false          # optional alternative provider
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
       - key: VOYAGE_API_KEY
         sync: false          # optional (semantic search)
       - key: EMBEDDING_MODEL
