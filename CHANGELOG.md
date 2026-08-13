@@ -10,6 +10,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Multi-provider LLM (Anthropic / OpenAI / Gemini).** The AI service's
+  generation features now work with any one of an Anthropic, OpenAI, or Google
+  Gemini API key. `config.active_provider` selects the provider: `LLM_PROVIDER`
+  (default `auto`) tries anthropic → openai → gemini by whichever key is present,
+  or forces one. `llm.py` dispatches `complete_text`/`complete_json` to the active
+  provider (each SDK lazily imported), and each records token usage for cost
+  monitoring (C3). Embeddings/semantic search stay on Voyage (the DB vector column
+  is fixed at 1024 dimensions). New deps: `openai`, `google-generativeai`.
+
 - **AI usage & cost monitoring (Roadmap C3).** The AI service now reports each
   call's token usage on response headers (captured in `llm.py` via a ContextVar,
   no schema change). The server attributes usage to the requesting user with

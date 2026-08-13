@@ -1,8 +1,9 @@
-"""Thin wrapper around the Anthropic Messages API.
+"""Provider-agnostic LLM wrapper.
 
-Kept small and side-effect free so tests can monkeypatch `complete_text`
-without any network access. Raises `LLMUnavailable` when no API key is set,
-which callers translate into a graceful 503.
+Supports Anthropic, OpenAI, and Google Gemini — whichever key is configured
+(see `config.active_provider`). Kept small and side-effect free so tests can
+monkeypatch `complete_text` without any network access. Raises `LLMUnavailable`
+when no provider is configured, which callers translate into a graceful 503.
 """
 import json
 import re
@@ -13,7 +14,7 @@ from config import get_settings
 
 
 class LLMUnavailable(RuntimeError):
-    """Raised when the LLM backend is not configured or reachable."""
+    """Raised when no LLM provider is configured or reachable."""
 
 
 # Per-request token usage of the last LLM call, so endpoints can report it back
@@ -33,27 +34,19 @@ def get_last_usage() -> Optional[dict]:
     return _last_usage.get()
 
 
-_client = None
+# Provider clients are created lazily and cached, so a provider's SDK is only
+# imported when that provider is actually used.
+_clients: dict = {}
 
 
-def _get_client():
-    global _client
+def _anthropic_complete(system: str, user: str, model: Optional[str], max_tokens: int) -> str:
     settings = get_settings()
-    if not settings.anthropic_enabled:
-        raise LLMUnavailable("ANTHROPIC_API_KEY is not configured")
-    if _client is None:
+    if "anthropic" not in _clients:
         import anthropic
 
-        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    return _client
-
-
-def complete_text(system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024) -> str:
-    """Return the assistant's text response for a single-turn prompt."""
-    settings = get_settings()
-    client = _get_client()
+        _clients["anthropic"] = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     used_model = model or settings.anthropic_model
-    resp = client.messages.create(
+    resp = _clients["anthropic"].messages.create(
         model=used_model,
         max_tokens=max_tokens,
         system=system,
@@ -61,12 +54,68 @@ def complete_text(system: str, user: str, model: Optional[str] = None, max_token
     )
     usage = getattr(resp, "usage", None)
     if usage is not None:
+        set_last_usage(getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0, used_model)
+    return "".join(block.text for block in resp.content if getattr(block, "type", None) == "text")
+
+
+def _openai_complete(system: str, user: str, model: Optional[str], max_tokens: int) -> str:
+    settings = get_settings()
+    if "openai" not in _clients:
+        import openai
+
+        _clients["openai"] = openai.OpenAI(api_key=settings.openai_api_key)
+    used_model = model or settings.openai_model
+    resp = _clients["openai"].chat.completions.create(
+        model=used_model,
+        max_tokens=max_tokens,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    usage = getattr(resp, "usage", None)
+    if usage is not None:
+        set_last_usage(getattr(usage, "prompt_tokens", 0) or 0, getattr(usage, "completion_tokens", 0) or 0, used_model)
+    return resp.choices[0].message.content or ""
+
+
+def _gemini_complete(system: str, user: str, model: Optional[str], max_tokens: int) -> str:
+    settings = get_settings()
+    used_model = model or settings.gemini_model
+    import google.generativeai as genai
+
+    genai.configure(api_key=settings.gemini_api_key)
+    gmodel = genai.GenerativeModel(model_name=used_model, system_instruction=system)
+    resp = gmodel.generate_content(
+        user,
+        generation_config={"max_output_tokens": max_tokens},
+    )
+    usage = getattr(resp, "usage_metadata", None)
+    if usage is not None:
         set_last_usage(
-            getattr(usage, "input_tokens", 0) or 0,
-            getattr(usage, "output_tokens", 0) or 0,
+            getattr(usage, "prompt_token_count", 0) or 0,
+            getattr(usage, "candidates_token_count", 0) or 0,
             used_model,
         )
-    return "".join(block.text for block in resp.content if getattr(block, "type", None) == "text")
+    return resp.text or ""
+
+
+_PROVIDERS = {
+    "anthropic": _anthropic_complete,
+    "openai": _openai_complete,
+    "gemini": _gemini_complete,
+}
+
+
+def complete_text(system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024) -> str:
+    """Return the assistant's text response for a single-turn prompt."""
+    settings = get_settings()
+    provider = settings.active_provider
+    if provider is None:
+        raise LLMUnavailable(
+            "No LLM provider configured — set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY"
+        )
+    return _PROVIDERS[provider](system, user, model, max_tokens)
 
 
 def _extract_json(text: str) -> str:

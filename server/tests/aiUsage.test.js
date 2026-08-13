@@ -38,6 +38,13 @@ describe('aiCost', () => {
   test('falls back to an Opus-tier rate for an unknown model', () => {
     expect(costUsd('mystery-model', 1_000_000, 0)).toBe(5);
   });
+
+  test('prices OpenAI and Gemini default models', () => {
+    // gpt-4o-mini: 1M in @ $0.15 + 1M out @ $0.60 = $0.75
+    expect(costUsd('gpt-4o-mini', 1_000_000, 1_000_000)).toBe(0.75);
+    // gemini-2.0-flash: 1M in @ $0.10 + 1M out @ $0.40 = $0.50
+    expect(costUsd('gemini-2.0-flash', 1_000_000, 1_000_000)).toBe(0.5);
+  });
 });
 
 describe('AI usage summary', () => {

@@ -9,15 +9,44 @@ import llm  # noqa: E402
 import summarizer  # noqa: E402
 import task_planner  # noqa: E402
 import assistant  # noqa: E402
+from config import Settings  # noqa: E402
 
 client = TestClient(main.app)
 KEY = {"X-Internal-Key": "dev-internal-key"}
 
 
+def _settings(**kwargs):
+    # Ignore any .env / OS keys so provider-selection is deterministic.
+    base = {"anthropic_api_key": "", "openai_api_key": "", "gemini_api_key": ""}
+    base.update(kwargs)
+    return Settings(_env_file=None, **base)
+
+
 def test_health():
     res = client.get("/health")
     assert res.status_code == 200
-    assert res.json()["status"] == "ok"
+    body = res.json()
+    assert body["status"] == "ok"
+    assert "provider" in body
+
+
+def test_active_provider_auto_priority():
+    assert _settings(anthropic_api_key="a", openai_api_key="o").active_provider == "anthropic"
+    assert _settings(openai_api_key="o", gemini_api_key="g").active_provider == "openai"
+    assert _settings(gemini_api_key="g").active_provider == "gemini"
+
+
+def test_active_provider_none():
+    s = _settings()
+    assert s.active_provider is None
+    assert s.any_llm_enabled is False
+
+
+def test_active_provider_forced_falls_back_when_key_missing():
+    # Forced provider with a key wins.
+    assert _settings(anthropic_api_key="a", openai_api_key="o", llm_provider="openai").active_provider == "openai"
+    # Forced provider without a key falls back to the first configured one.
+    assert _settings(anthropic_api_key="a", llm_provider="gemini").active_provider == "anthropic"
 
 
 def test_requires_internal_key():

@@ -69,7 +69,8 @@ def health():
     return {
         "status": "ok",
         "service": "ai-service",
-        "llm": settings.anthropic_enabled,
+        "llm": settings.any_llm_enabled,
+        "provider": settings.active_provider,
         "embeddings": settings.embeddings_enabled,
     }
 

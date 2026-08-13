@@ -447,8 +447,8 @@ cd client && cp .env.example .env && npm install && npm run dev
 | `DATABASE_URL`, `DIRECT_URL` | server | Supabase/Postgres connection (pooled + direct) |
 | `JWT_SECRET` | server | Sign auth tokens |
 | `INTERNAL_API_KEY` | server + ai-service | Shared secret; only the server may call the AI service |
-| `ANTHROPIC_API_KEY` | ai-service | LLM (task parsing, summarizing, chat, prioritization) |
-| `VOYAGE_API_KEY` | ai-service | Embeddings for semantic search |
+| `ANTHROPIC_API_KEY` **or** `OPENAI_API_KEY` **or** `GEMINI_API_KEY` | ai-service | LLM for generation (task parsing, summarizing, chat, breakdown, plan-day, prioritization). Configure **any one**; `LLM_PROVIDER=auto` (default) picks anthropic → openai → gemini by whichever key is set, or force one with `LLM_PROVIDER`. |
+| `VOYAGE_API_KEY` | ai-service | Embeddings for semantic search (Voyage only — the DB vector column is 1024-dim) |
 | `EMBEDDINGS_ENABLED=true` | server | Turn on embedding indexing + semantic search |
 
 The app degrades gracefully: if the AI service or its keys are absent, core task/note/calendar/reminder features keep working and search falls back to keyword matching.
