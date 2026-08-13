@@ -7,7 +7,10 @@ function dayKey(d) {
 }
 
 async function summary(req, res) {
-  const tasks = await prisma.task.findMany({ where: { userId: req.user.id } });
+  const [tasks, sessions] = await Promise.all([
+    prisma.task.findMany({ where: { userId: req.user.id } }),
+    prisma.focusSession.findMany({ where: { userId: req.user.id } }),
+  ]);
   const now = new Date();
 
   const total = tasks.length;
@@ -18,7 +21,12 @@ async function summary(req, res) {
   ).length;
   const completionRate = total ? Math.round((completed / total) * 100) : 0;
 
-  res.json({ total, completed, pending, overdue, completionRate });
+  const todayKey = dayKey(now);
+  const focusSecondsToday = sessions
+    .filter((s) => dayKey(s.startedAt) === todayKey)
+    .reduce((sum, s) => sum + s.seconds, 0);
+
+  res.json({ total, completed, pending, overdue, completionRate, focusSecondsToday });
 }
 
 async function trends(req, res) {

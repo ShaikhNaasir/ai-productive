@@ -11,6 +11,7 @@ const modelDefaults = {
   notes: { content: '', category: null, tags: [], pinned: false },
   schedules: { description: null, location: null, endTime: null },
   reminders: { sent: false, recurrence: 'NONE', taskId: null },
+  focusSessions: { taskId: null, endedAt: null, seconds: 0 },
   users: { name: null },
 };
 
@@ -175,6 +176,7 @@ function createFakePrisma() {
     note: makeModel('notes'),
     schedule: makeModel('schedules'),
     reminder: makeModel('reminders'),
+    focusSession: makeModel('focusSessions'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},

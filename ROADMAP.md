@@ -27,12 +27,13 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 - [x] Tests: `recurrence.test.js` (8) + task spawn (4) + scheduler chain (2) + client control (1). Server 56 tests green, client green, lint clean.
 - [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).
 
-### A3 — Pomodoro focus timer + time tracking
-- [ ] Prisma: `FocusSession` model (`userId`, `taskId?`, `startedAt`, `endedAt`, `seconds`).
-- [ ] Server: start/stop session endpoints, user-scoped; aggregate per task/day.
-- [ ] Client: Pomodoro timer component bound to a task; persists sessions.
-- [ ] Analytics: surface "Time Spent" (currently omitted — this unblocks the README metric).
-- [ ] Tests: server + client.
+### A3 — Pomodoro focus timer + time tracking ✅
+- [x] Prisma: `FocusSession` model (`userId`, `taskId?`, `startedAt`, `endedAt`, `seconds`); task delete `SetNull` keeps tracked time.
+- [x] Server: `POST /api/focus/start` (optional owned `taskId` + `startedAt`), `POST /api/focus/:id/stop` (computes seconds from timestamps), `GET /api/focus/stats` (per-task + per-day aggregate), user-scoped.
+- [x] Client: `PomodoroTimer` bound to a task (25/15/5 presets, countdown, auto-stop) persisting sessions; mounted on Tasks page.
+- [x] Analytics: `summary.focusSecondsToday` + "Focus Today" tile (README "Time Spent" metric).
+- [x] Tests: `focus.test.js` (7) + analytics focus (1) + `PomodoroTimer` (2); `fakePrisma` gains `focusSession`. Server 69 green, client green, lint clean, build OK.
+- [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).
 
 ### A4 — AI Daily Planner ("Plan my day")
 - [ ] AI service: `/plan-day` — build a time-blocked schedule from open tasks + calendar + priorities; schema-validated blocks.

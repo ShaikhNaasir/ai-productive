@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { analyticsService } from '@/services/analyticsService';
 import { apiError } from '@/lib/api';
+import { formatDuration } from '@/lib/utils';
 import StatCard from '@/components/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -45,11 +46,12 @@ export default function Analytics() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Analytics</h1>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Completed" value={summary.completed} />
         <StatCard label="Pending" value={summary.pending} />
         <StatCard label="Overdue" value={summary.overdue} />
         <StatCard label="Completion Rate" value={`${summary.completionRate}%`} />
+        <StatCard label="Focus Today" value={formatDuration(summary.focusSecondsToday || 0)} />
       </div>
 
       <Card>

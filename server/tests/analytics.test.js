@@ -48,4 +48,14 @@ describe('analytics', () => {
     expect(work.count).toBe(2);
     expect(res.body.byStatus.COMPLETED).toBe(1);
   });
+
+  test('summary surfaces focus time tracked today', async () => {
+    const startedAt = new Date(Date.now() - 90 * 1000).toISOString();
+    const started = await request(app).post('/api/focus/start').set(auth()).send({ startedAt });
+    await request(app).post(`/api/focus/${started.body.session.id}/stop`).set(auth());
+
+    const res = await request(app).get('/api/analytics/summary').set(auth());
+    expect(res.status).toBe(200);
+    expect(res.body.focusSecondsToday).toBeGreaterThanOrEqual(89);
+  });
 });
