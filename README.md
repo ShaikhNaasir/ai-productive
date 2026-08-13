@@ -36,6 +36,7 @@ backlog.
 | Habit tracking (B2) | Daily habits with idempotent check-in, current + longest streaks, analytics tile | `GET/POST /api/habits`, `POST /api/habits/:id/check-in` |
 | PWA — installable + offline shell (B3) | Installable app, offline app shell; service worker never caches API/private data | client `manifest.webmanifest` + `sw.js` |
 | Voice command capture (B4) | Speak a task in the "AI Add" box (Web Speech API); graceful fallback where unsupported | client `VoiceInput` → `POST /api/ai/tasks` |
+| Shared / team tasks (C2) | Share a task by email (VIEW/EDIT); "Shared" tab with role-based access; delete stays owner-only | `POST /api/tasks/:id/share`, `GET /api/tasks/shared` |
 
 ## 🛠 Technologies Used
 

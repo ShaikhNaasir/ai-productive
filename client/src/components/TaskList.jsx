@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Trash2, Check, Plus, Sparkles, Pencil, X, Save, ListTree, ChevronRight, ChevronDown } from 'lucide-react';
+import { Trash2, Check, Plus, Sparkles, Pencil, X, Save, ListTree, ChevronRight, ChevronDown, Share2 } from 'lucide-react';
 import { taskService } from '@/services/taskService';
 import { aiService } from '@/services/aiService';
 import VoiceInput from '@/components/VoiceInput';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn, formatDate } from '@/lib/utils';
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH'];
-const STATUSES = ['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED'];
+const STATUSES = ['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'SHARED'];
 const RECURRENCES = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
 
 function priorityVariant(p) {
@@ -34,13 +34,21 @@ export default function TaskList() {
   const [editForm, setEditForm] = useState({ title: '', priority: 'MEDIUM', dueDate: '' });
   const [expanded, setExpanded] = useState(() => new Set());
   const [breakingId, setBreakingId] = useState(null);
+  const [shareId, setShareId] = useState(null);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareRole, setShareRole] = useState('VIEW');
+  const [shares, setShares] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const params = filter === 'ALL' ? {} : { status: filter };
-      setTasks(await taskService.list(params));
+      if (filter === 'SHARED') {
+        setTasks(await taskService.listShared());
+      } else {
+        const params = filter === 'ALL' ? {} : { status: filter };
+        setTasks(await taskService.list(params));
+      }
     } catch (err) {
       setError(apiError(err, 'Failed to load tasks'));
     } finally {
@@ -162,8 +170,43 @@ export default function TaskList() {
     }
   };
 
+  const openShare = async (id) => {
+    if (shareId === id) return setShareId(null);
+    setShareId(id);
+    setShareEmail('');
+    setShareRole('VIEW');
+    try {
+      setShares(await taskService.listShares(id));
+    } catch {
+      setShares([]);
+    }
+  };
+
+  const submitShare = async (e) => {
+    e.preventDefault();
+    if (!shareEmail.trim()) return;
+    try {
+      await taskService.share(shareId, { email: shareEmail, role: shareRole });
+      setShareEmail('');
+      setShares(await taskService.listShares(shareId));
+    } catch (err) {
+      setError(apiError(err, 'Failed to share task'));
+    }
+  };
+
+  const revokeShare = async (userId) => {
+    try {
+      await taskService.unshare(shareId, userId);
+      setShares(await taskService.listShares(shareId));
+    } catch (err) {
+      setError(apiError(err, 'Failed to revoke share'));
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {filter !== 'SHARED' && (
+      <>
       <form onSubmit={aiAdd} className="flex flex-col gap-2 sm:flex-row">
         <Input
           placeholder='Describe a task, e.g. "Prepare for interview next Friday"'
@@ -217,6 +260,8 @@ export default function TaskList() {
           <Plus className="h-4 w-4" /> Add
         </Button>
       </form>
+      </>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {STATUSES.map((s) => (
@@ -235,7 +280,9 @@ export default function TaskList() {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : tasks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tasks yet. Add one above.</p>
+        <p className="text-sm text-muted-foreground">
+          {filter === 'SHARED' ? 'No tasks shared with you yet.' : 'No tasks yet. Add one above.'}
+        </p>
       ) : (
         <ul>
           {tasks.map((task) =>
@@ -299,6 +346,7 @@ export default function TaskList() {
                         {task.subtasks?.length ? (
                           <Badge variant="secondary">{task.subtasks.length} subtasks</Badge>
                         ) : null}
+                        {task.owner && <Badge variant="outline">from {task.owner.email}</Badge>}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {task.status.replace('_', ' ')}
@@ -308,39 +356,100 @@ export default function TaskList() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <select
-                      value={task.status}
-                      onChange={(e) => updateStatus(task.id, e.target.value)}
-                      className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-                      aria-label="Task status"
-                    >
-                      <option value="PENDING">Pending</option>
-                      <option value="IN_PROGRESS">In Progress</option>
-                      <option value="COMPLETED">Completed</option>
-                    </select>
-                    {task.status !== 'COMPLETED' && (
+                    {(!task.myRole || task.myRole === 'EDIT') && (
+                      <select
+                        value={task.status}
+                        onChange={(e) => updateStatus(task.id, e.target.value)}
+                        className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+                        aria-label="Task status"
+                      >
+                        <option value="PENDING">Pending</option>
+                        <option value="IN_PROGRESS">In Progress</option>
+                        <option value="COMPLETED">Completed</option>
+                      </select>
+                    )}
+                    {(!task.myRole || task.myRole === 'EDIT') && task.status !== 'COMPLETED' && (
                       <Button size="icon" variant="ghost" onClick={() => complete(task.id)} aria-label="Mark complete">
                         <Check className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => breakDown(task.id)}
-                      disabled={breakingId === task.id}
-                      aria-label="AI Break Down"
-                      title="AI Break Down"
-                    >
-                      <ListTree className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => startEdit(task)} aria-label="Edit">
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => remove(task.id)} aria-label="Delete">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {(!task.myRole || task.myRole === 'EDIT') && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => breakDown(task.id)}
+                        disabled={breakingId === task.id}
+                        aria-label="AI Break Down"
+                        title="AI Break Down"
+                      >
+                        <ListTree className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {(!task.myRole || task.myRole === 'EDIT') && (
+                      <Button size="icon" variant="ghost" onClick={() => startEdit(task)} aria-label="Edit">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {!task.myRole && (
+                      <Button size="icon" variant="ghost" onClick={() => openShare(task.id)} aria-label="Share task">
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {!task.myRole && (
+                      <Button size="icon" variant="ghost" onClick={() => remove(task.id)} aria-label="Delete">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {task.myRole === 'VIEW' && (
+                      <span className="text-xs text-muted-foreground">View only</span>
+                    )}
                   </div>
                 </div>
+                {shareId === task.id && !task.myRole && (
+                  <div className="mt-2 rounded-md border border-border p-2">
+                    <form onSubmit={submitShare} className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        type="email"
+                        placeholder="Share with email…"
+                        value={shareEmail}
+                        onChange={(e) => setShareEmail(e.target.value)}
+                        className="flex-1"
+                        aria-label="Share email"
+                      />
+                      <select
+                        value={shareRole}
+                        onChange={(e) => setShareRole(e.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        aria-label="Share role"
+                      >
+                        <option value="VIEW">Can view</option>
+                        <option value="EDIT">Can edit</option>
+                      </select>
+                      <Button type="submit" size="sm">
+                        <Share2 className="h-4 w-4" /> Share
+                      </Button>
+                    </form>
+                    {shares.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {shares.map((s) => (
+                          <li key={s.id} className="flex items-center justify-between text-xs">
+                            <span>
+                              {s.email} · {s.role}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => revokeShare(s.userId)}
+                              aria-label={`Revoke ${s.email}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 {task.subtasks?.length && expanded.has(task.id) ? (
                   <ul className="mt-2 space-y-1 border-l border-border pl-6">
                     {task.subtasks.map((sub) => (
@@ -350,14 +459,16 @@ export default function TaskList() {
                       >
                         <span className="truncate">{sub.title}</span>
                         <div className="flex shrink-0 items-center gap-1">
-                          {sub.status !== 'COMPLETED' && (
+                          {(!task.myRole || task.myRole === 'EDIT') && sub.status !== 'COMPLETED' && (
                             <Button size="icon" variant="ghost" onClick={() => complete(sub.id)} aria-label="Complete subtask">
                               <Check className="h-4 w-4" />
                             </Button>
                           )}
-                          <Button size="icon" variant="ghost" onClick={() => removeSubtask(sub.id)} aria-label="Delete subtask">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {!task.myRole && (
+                            <Button size="icon" variant="ghost" onClick={() => removeSubtask(sub.id)} aria-label="Delete subtask">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </li>
                     ))}

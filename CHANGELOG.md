@@ -10,6 +10,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Shared tasks — client (Roadmap C2.2).** Each owned task gets a Share action
+  opening a dialog to share by email with a VIEW or EDIT role, and to list/revoke
+  existing shares. A new "Shared" tab loads tasks shared with you, showing the
+  owner and enforcing the role: VIEW is read-only, EDIT allows editing and
+  completing, while deleting and re-sharing stay owner-only.
+
 - **Shared tasks — backend (Roadmap C2.1).** New `TaskShare` model (VIEW/EDIT
   role, unique per task+user) lets an owner share a task with another registered
   user by email. `services/taskAccess.js` centralizes authorization: a user may
