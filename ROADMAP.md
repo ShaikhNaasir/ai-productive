@@ -49,11 +49,12 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 - [x] Client: "Upload document" card on Notes; shows key points + summary and refreshes the list.
 - [x] Tests: `document.test.js` (6 — store+summarize, 503 fallback, unsupported type, size limit, no file, auth); client Notes upload (1). Server 79 green, client green, lint clean, build OK.
 
-### B2 — Habit tracking
-- [ ] Prisma: `Habit` + `HabitLog` models (streaks), user-scoped.
-- [ ] Server: CRUD + check-in; streak calc.
-- [ ] Client: habits page with streak view; analytics tile.
-- [ ] Tests: server + client.
+### B2 — Habit tracking ✅
+- [x] Prisma: `Habit` + `HabitLog` (unique `[habitId, date]`, cascade), user-scoped.
+- [x] Server: `/api/habits` CRUD + idempotent `POST /:id/check-in` and `DELETE /:id/check-in` (uncheck); `utils/streak.js` computes current + longest streak.
+- [x] Client: `/habits` page (Flame nav) with per-habit check-in toggle + streak badges; "Habits Today X/Y" analytics tile.
+- [x] Tests: `streak.test.js` (8) + `habit.test.js` (9, incl. analytics) + client `HabitList` (1); `fakePrisma` gains `habit`/`habitLog`. Server 96 green, client green, lint clean, build OK.
+- [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).
 
 ### B3 — PWA (installable + offline shell)
 - [ ] Client: manifest, service worker, offline app shell, install prompt.

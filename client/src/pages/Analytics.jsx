@@ -46,12 +46,16 @@ export default function Analytics() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Analytics</h1>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Completed" value={summary.completed} />
         <StatCard label="Pending" value={summary.pending} />
         <StatCard label="Overdue" value={summary.overdue} />
         <StatCard label="Completion Rate" value={`${summary.completionRate}%`} />
         <StatCard label="Focus Today" value={formatDuration(summary.focusSecondsToday || 0)} />
+        <StatCard
+          label="Habits Today"
+          value={`${summary.habitsCheckedToday ?? 0}/${summary.habitsTotal ?? 0}`}
+        />
       </div>
 
       <Card>

@@ -10,6 +10,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Habit tracking (Roadmap B2).** New `Habit` and `HabitLog` models (one log per
+  habit per UTC day, unique). Endpoints under `/api/habits`: CRUD plus an
+  idempotent `POST /:id/check-in` and `DELETE /:id/check-in` (uncheck). Current
+  and longest streaks are computed by a pure `utils/streak.js`. A new `/habits`
+  page (Flame nav item) lists habits with a check-in toggle and streak badges,
+  and the Analytics summary gains a "Habits Today X/Y" tile
+  (`habitsCheckedToday` / `habitsTotal`).
+
 - **Document upload & AI summarization (Roadmap B1).** New authenticated endpoint
   `POST /api/documents/upload` accepts a multipart file (`.txt`, `.md`, `.csv`,
   `.log`, `.pdf`; max 2MB). The server extracts the text (`services/textExtract.js`,

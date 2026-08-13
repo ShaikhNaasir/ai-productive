@@ -7,9 +7,11 @@ function dayKey(d) {
 }
 
 async function summary(req, res) {
-  const [tasks, sessions] = await Promise.all([
+  const [tasks, sessions, habits, habitLogs] = await Promise.all([
     prisma.task.findMany({ where: { userId: req.user.id } }),
     prisma.focusSession.findMany({ where: { userId: req.user.id } }),
+    prisma.habit.findMany({ where: { userId: req.user.id } }),
+    prisma.habitLog.findMany({ where: { userId: req.user.id } }),
   ]);
   const now = new Date();
 
@@ -26,7 +28,22 @@ async function summary(req, res) {
     .filter((s) => dayKey(s.startedAt) === todayKey)
     .reduce((sum, s) => sum + s.seconds, 0);
 
-  res.json({ total, completed, pending, overdue, completionRate, focusSecondsToday });
+  const habitsTotal = habits.length;
+  const checkedHabitIds = new Set(
+    habitLogs.filter((l) => dayKey(l.date) === todayKey).map((l) => l.habitId)
+  );
+  const habitsCheckedToday = checkedHabitIds.size;
+
+  res.json({
+    total,
+    completed,
+    pending,
+    overdue,
+    completionRate,
+    focusSecondsToday,
+    habitsTotal,
+    habitsCheckedToday,
+  });
 }
 
 async function trends(req, res) {

@@ -45,6 +45,8 @@ model User {
   schedules     Schedule[]
   reminders     Reminder[]
   focusSessions FocusSession[]
+  habits        Habit[]
+  habitLogs     HabitLog[]
 
   @@map("users")
 }
@@ -136,6 +138,40 @@ model FocusSession {
   @@index([userId])
   @@index([taskId])
   @@map("focus_sessions")
+}
+
+// Habit tracking (Roadmap B2). A habit accrues one HabitLog per day it is
+// checked in; streaks are computed from those logs. Deleting a habit cascades
+// to its logs.
+model Habit {
+  id          String     @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs HabitLog[]
+
+  @@index([userId])
+  @@map("habits")
+}
+
+model HabitLog {
+  id        String   @id @default(uuid())
+  habitId   String
+  userId    String
+  // The UTC day (midnight) this check-in counts for. Unique per habit per day.
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([userId])
+  @@map("habit_logs")
 }
 
 model Reminder {

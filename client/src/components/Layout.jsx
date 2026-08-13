@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   CheckSquare,
+  Flame,
   StickyNote,
   Calendar as CalendarIcon,
   MessageSquare,
@@ -23,6 +24,7 @@ import { cn, formatDate } from '@/lib/utils';
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/tasks', label: 'Tasks', icon: CheckSquare },
+  { to: '/habits', label: 'Habits', icon: Flame },
   { to: '/notes', label: 'Notes', icon: StickyNote },
   { to: '/calendar', label: 'Calendar', icon: CalendarIcon },
   { to: '/assistant', label: 'Assistant', icon: MessageSquare },

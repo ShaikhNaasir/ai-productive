@@ -19,6 +19,7 @@ router.use('/ai', require('./ai.routes'));
 router.use('/analytics', require('./analytics.routes'));
 router.use('/focus', require('./focus.routes'));
 router.use('/documents', require('./document.routes'));
+router.use('/habits', require('./habit.routes'));
 router.use('/search', require('./search.routes'));
 
 module.exports = router;

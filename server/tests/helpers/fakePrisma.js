@@ -12,6 +12,8 @@ const modelDefaults = {
   schedules: { description: null, location: null, endTime: null },
   reminders: { sent: false, recurrence: 'NONE', taskId: null },
   focusSessions: { taskId: null, endedAt: null, seconds: 0 },
+  habits: { description: null },
+  habitLogs: {},
   users: { name: null },
 };
 
@@ -177,6 +179,8 @@ function createFakePrisma() {
     schedule: makeModel('schedules'),
     reminder: makeModel('reminders'),
     focusSession: makeModel('focusSessions'),
+    habit: makeModel('habits'),
+    habitLog: makeModel('habitLogs'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},

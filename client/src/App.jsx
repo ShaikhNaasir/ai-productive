@@ -5,6 +5,7 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import Dashboard from '@/pages/Dashboard';
 import Tasks from '@/pages/Tasks';
+import Habits from '@/pages/Habits';
 import Notes from '@/pages/Notes';
 import Calendar from '@/pages/Calendar';
 import Assistant from '@/pages/Assistant';
@@ -27,6 +28,7 @@ export default function App() {
       >
         <Route path="/" element={<Dashboard />} />
         <Route path="/tasks" element={<Tasks />} />
+        <Route path="/habits" element={<Habits />} />
         <Route path="/notes" element={<Notes />} />
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/assistant" element={<Assistant />} />
