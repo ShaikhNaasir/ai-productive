@@ -43,11 +43,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 
 ## Tier B — moderate effort
 
-### B1 — Document upload + AI summarization
-- [ ] Server: authenticated file upload (size/type limits), text extraction, user-scoped storage.
-- [ ] AI service: reuse `summarizer` on extracted text.
-- [ ] Client: upload UI on Notes; show key points + summary.
-- [ ] Tests: upload + extraction + summarize path.
+### B1 — Document upload + AI summarization ✅
+- [x] Server: `POST /api/documents/upload` — authenticated multipart upload (multer, 2MB, mimetype allowlist); `services/textExtract.js` extracts text (.txt/.md/.csv/.log utf8, .pdf via pdf-parse); stores the document as a user-scoped note (`tags: ['document']`).
+- [x] AI service: reuses the existing `summarizer` via `aiClient.summarize` on the extracted text (degrades gracefully — the note is stored even if AI is down).
+- [x] Client: "Upload document" card on Notes; shows key points + summary and refreshes the list.
+- [x] Tests: `document.test.js` (6 — store+summarize, 503 fallback, unsupported type, size limit, no file, auth); client Notes upload (1). Server 79 green, client green, lint clean, build OK.
 
 ### B2 — Habit tracking
 - [ ] Prisma: `Habit` + `HabitLog` models (streaks), user-scoped.

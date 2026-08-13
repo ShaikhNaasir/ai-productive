@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Trash2, Pin, PinOff, Plus, Search as SearchIcon, Sparkles, Pencil, Save, X } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Trash2, Pin, PinOff, Plus, Search as SearchIcon, Sparkles, Pencil, Save, X, Upload } from 'lucide-react';
 import { noteService } from '@/services/noteService';
 import { aiService } from '@/services/aiService';
+import { documentService } from '@/services/documentService';
 import { apiError } from '@/lib/api';
 import { useDebounce } from '@/lib/useDebounce';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,8 @@ export default function Notes() {
   const [summaries, setSummaries] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ title: '', content: '', category: '', tags: '' });
+  const [upload, setUpload] = useState(null); // { loading } | { summary, key_points } | { error }
+  const fileInputRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,6 +101,21 @@ export default function Notes() {
     }
   };
 
+  const uploadDocument = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUpload({ loading: true });
+    try {
+      const result = await documentService.upload(file);
+      setUpload({ summary: result.summary, key_points: result.key_points });
+      load();
+    } catch (err) {
+      setUpload({ error: apiError(err, 'Upload failed') });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const summarize = async (id) => {
     setSummaries((s) => ({ ...s, [id]: { loading: true } }));
     try {
@@ -126,6 +144,41 @@ export default function Notes() {
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Upload document</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.md,.csv,.log,.pdf,text/plain,text/markdown,text/csv,application/pdf"
+              onChange={uploadDocument}
+              aria-label="Upload document"
+              className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
+            />
+            <span className="text-xs text-muted-foreground">
+              <Upload className="mr-1 inline h-3 w-3" />
+              .txt, .md, .csv, .pdf · max 2MB · stored as a note + summarized
+            </span>
+          </div>
+          {upload?.loading && <p className="text-sm text-muted-foreground">Uploading &amp; summarizing…</p>}
+          {upload?.error && <p className="text-sm text-destructive">{upload.error}</p>}
+          {upload?.key_points?.length > 0 && (
+            <div className="rounded-md bg-muted p-2 text-xs">
+              <p className="font-semibold">Key points</p>
+              <ul className="ml-4 list-disc">
+                {upload.key_points.map((k, i) => (
+                  <li key={i}>{k}</li>
+                ))}
+              </ul>
+              {upload.summary && <p className="mt-1">{upload.summary}</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
 

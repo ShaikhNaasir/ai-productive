@@ -20,6 +20,20 @@ Platform where users can:
 - 🔍 Search their information
 - 📱 Use the application on any device
 
+## ✅ Implemented Enhancements (post-launch)
+
+Beyond the base spec below, these roadmap features are shipped. See
+[`CHANGELOG.md`](CHANGELOG.md) for details and [`ROADMAP.md`](ROADMAP.md) for the
+backlog.
+
+| Feature | What it does | Key endpoints |
+|---------|--------------|---------------|
+| Recurring tasks & reminders (A2) | Daily/weekly/monthly repeat; completing one spawns the next occurrence | `tasks`, `reminders` `recurrence` field |
+| Subtasks & AI breakdown (A1) | Nest subtasks under a task; AI splits a task into ordered subtasks | `POST /api/ai/tasks/:id/breakdown` |
+| Pomodoro focus timer & time tracking (A3) | Start/stop focus sessions bound to a task; "Time Spent" analytics | `POST /api/focus/start`, `/api/focus/:id/stop`, `GET /api/focus/stats` |
+| AI daily planner "Plan my day" (A4) | Time-blocked plan from open tasks + calendar; accept → schedule entries | `POST /api/ai/plan-day`, `POST /api/ai/plan-day/accept` |
+| Document upload & AI summarization (B1) | Upload .txt/.md/.csv/.pdf → stored as a note + AI key points/summary | `POST /api/documents/upload` |
+
 ## 🛠 Technologies Used
 
 **Frontend**
