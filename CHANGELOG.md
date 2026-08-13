@@ -10,6 +10,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Progressive Web App (Roadmap B3).** The client is now installable and works
+  offline as an app shell: a web manifest + SVG icon, a hand-rolled service
+  worker (`public/sw.js`) that precaches the shell, serves navigations
+  network-first with an offline fallback, and caches static assets cache-first.
+  The worker deliberately ignores cross-origin and `/api` requests, so no private
+  or API data is ever cached. Registration is production-only, and an
+  `InstallPrompt` button appears when the browser offers installation.
+
 - **Habit tracking (Roadmap B2).** New `Habit` and `HabitLog` models (one log per
   habit per UTC day, unique). Endpoints under `/api/habits`: CRUD plus an
   idempotent `POST /:id/check-in` and `DELETE /:id/check-in` (uncheck). Current

@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationContext';
+import InstallPrompt from '@/components/InstallPrompt';
 import { Button } from '@/components/ui/button';
 import { cn, formatDate } from '@/lib/utils';
 
@@ -81,6 +82,7 @@ export default function Layout() {
         <header className="flex items-center justify-between border-b bg-card px-4 py-3">
           <div className="text-sm font-semibold md:hidden">Productivity</div>
           <div className="ml-auto flex items-center gap-2">
+            <InstallPrompt />
             <div className="relative">
               <Button variant="ghost" size="icon" onClick={toggleBell} aria-label="Notifications">
                 <Bell className="h-4 w-4" />

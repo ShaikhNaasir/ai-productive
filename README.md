@@ -34,6 +34,7 @@ backlog.
 | AI daily planner "Plan my day" (A4) | Time-blocked plan from open tasks + calendar; accept → schedule entries | `POST /api/ai/plan-day`, `POST /api/ai/plan-day/accept` |
 | Document upload & AI summarization (B1) | Upload .txt/.md/.csv/.pdf → stored as a note + AI key points/summary | `POST /api/documents/upload` |
 | Habit tracking (B2) | Daily habits with idempotent check-in, current + longest streaks, analytics tile | `GET/POST /api/habits`, `POST /api/habits/:id/check-in` |
+| PWA — installable + offline shell (B3) | Installable app, offline app shell; service worker never caches API/private data | client `manifest.webmanifest` + `sw.js` |
 
 ## 🛠 Technologies Used
 

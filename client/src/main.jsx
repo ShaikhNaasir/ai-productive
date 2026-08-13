@@ -5,7 +5,10 @@ import App from './App';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { NotificationProvider } from '@/context/NotificationContext';
+import { registerServiceWorker } from './registerSW';
 import './index.css';
+
+if (import.meta.env.PROD) registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

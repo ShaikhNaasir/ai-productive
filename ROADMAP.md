@@ -56,10 +56,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 - [x] Tests: `streak.test.js` (8) + `habit.test.js` (9, incl. analytics) + client `HabitList` (1); `fakePrisma` gains `habit`/`habitLog`. Server 96 green, client green, lint clean, build OK.
 - [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).
 
-### B3 — PWA (installable + offline shell)
-- [ ] Client: manifest, service worker, offline app shell, install prompt.
-- [ ] Cache-safe with auth (no stale private data).
-- [ ] Tests: build + basic SW registration check.
+### B3 — PWA (installable + offline shell) ✅
+- [x] Client: `manifest.webmanifest` + SVG icon, hand-rolled `sw.js` (precached shell, network-first navigations with offline fallback, cache-first assets), prod-only registration, `InstallPrompt` button.
+- [x] Cache-safe with auth: the SW ignores cross-origin **and** `/api` requests, so no private/API data is ever cached — only the static shell.
+- [x] Tests: `registerSW.test.js` (2) + `installPrompt.test.jsx` (2); `npm run build` copies `manifest`/`sw`/`icon` into `dist`. Client 14 green, lint clean, build OK.
 
 ### B4 — Voice command capture
 - [ ] Client: Web Speech API mic input feeding existing NL task creation.
