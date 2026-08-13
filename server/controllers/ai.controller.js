@@ -203,6 +203,58 @@ async function chat(req, res) {
   res.json(result);
 }
 
+// Per-user AI usage & cost summary (Roadmap C3): totals, per-endpoint breakdown,
+// and the last 7 days of spend.
+async function usage(req, res) {
+  const rows = await prisma.aiUsage.findMany({ where: { userId: req.user.id } });
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCostUsd = 0;
+  const byEndpointMap = {};
+  const dayKey = (d) => new Date(d).toISOString().slice(0, 10);
+
+  const days = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    days.push(dayKey(d));
+  }
+  const costByDay = Object.fromEntries(days.map((d) => [d, 0]));
+
+  for (const r of rows) {
+    totalInputTokens += r.inputTokens;
+    totalOutputTokens += r.outputTokens;
+    totalCostUsd += r.costUsd;
+    const e = (byEndpointMap[r.endpoint] = byEndpointMap[r.endpoint] || {
+      endpoint: r.endpoint,
+      calls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+    });
+    e.calls += 1;
+    e.inputTokens += r.inputTokens;
+    e.outputTokens += r.outputTokens;
+    e.costUsd += r.costUsd;
+    const key = dayKey(r.createdAt);
+    if (key in costByDay) costByDay[key] += r.costUsd;
+  }
+
+  const round = (n) => Math.round(n * 1e6) / 1e6;
+  res.json({
+    callCount: rows.length,
+    totalInputTokens,
+    totalOutputTokens,
+    totalCostUsd: round(totalCostUsd),
+    byEndpoint: Object.values(byEndpointMap)
+      .map((e) => ({ ...e, costUsd: round(e.costUsd) }))
+      .sort((a, b) => b.costUsd - a.costUsd),
+    last7Days: days.map((d) => ({ date: d, costUsd: round(costByDay[d]) })),
+  });
+}
+
 // Backfill embeddings for all of the user's existing tasks and notes so semantic
 // search works over data created before embeddings were enabled.
 async function reindex(req, res) {
@@ -221,4 +273,4 @@ async function reindex(req, res) {
   res.json({ indexed: tasks.length + notes.length });
 }
 
-module.exports = { parseTask, createTaskFromText, breakdownTask, planDay, acceptPlan, summarize, prioritize, chat, reindex };
+module.exports = { parseTask, createTaskFromText, breakdownTask, planDay, acceptPlan, summarize, prioritize, chat, usage, reindex };

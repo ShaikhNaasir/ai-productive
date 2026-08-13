@@ -8,3 +8,12 @@ if (!window.matchMedia) {
     removeEventListener: () => {},
   });
 }
+
+// jsdom lacks ResizeObserver; recharts' ResponsiveContainer needs it.
+if (!global.ResizeObserver) {
+  global.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

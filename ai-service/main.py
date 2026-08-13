@@ -4,7 +4,7 @@ All feature endpoints require the internal shared key (X-Internal-Key) so only t
 Express server can call them. LLM/embedding failures degrade to HTTP 503 so the
 main app can fall back gracefully.
 """
-from fastapi import FastAPI, Depends, Header, HTTPException
+from fastapi import FastAPI, Depends, Header, HTTPException, Response
 
 from config import get_settings
 from schemas import (
@@ -25,6 +25,7 @@ from schemas import (
 )
 from llm import LLMUnavailable
 from embeddings import EmbeddingsUnavailable
+import llm
 import summarizer
 import task_planner
 import assistant
@@ -49,6 +50,19 @@ def _guard(callable_, *args, **kwargs):
         raise HTTPException(status_code=502, detail=str(exc))
 
 
+# Run an LLM feature and expose its token usage on response headers so the server
+# can attribute cost per user (Roadmap C3). Body/schema are untouched.
+def _guard_llm(response: Response, callable_, *args, **kwargs):
+    llm.reset_usage()
+    result = _guard(callable_, *args, **kwargs)
+    usage = llm.get_last_usage()
+    if usage:
+        response.headers["X-AI-Input-Tokens"] = str(usage["input_tokens"])
+        response.headers["X-AI-Output-Tokens"] = str(usage["output_tokens"])
+        response.headers["X-AI-Model"] = usage["model"]
+    return result
+
+
 @app.get("/health")
 def health():
     settings = get_settings()
@@ -61,33 +75,33 @@ def health():
 
 
 @app.post("/summarize", response_model=SummarizeResponse)
-def summarize_endpoint(req: SummarizeRequest, _=Depends(require_internal_key)):
-    return _guard(summarizer.summarize, req.text)
+def summarize_endpoint(req: SummarizeRequest, response: Response, _=Depends(require_internal_key)):
+    return _guard_llm(response, summarizer.summarize, req.text)
 
 
 @app.post("/parse-task", response_model=ParsedTask)
-def parse_task_endpoint(req: ParseTaskRequest, _=Depends(require_internal_key)):
-    return _guard(task_planner.parse_task, req.text, req.now)
+def parse_task_endpoint(req: ParseTaskRequest, response: Response, _=Depends(require_internal_key)):
+    return _guard_llm(response, task_planner.parse_task, req.text, req.now)
 
 
 @app.post("/breakdown", response_model=BreakdownResponse)
-def breakdown_endpoint(req: BreakdownRequest, _=Depends(require_internal_key)):
-    return _guard(task_planner.breakdown, req.title, req.description, req.now)
+def breakdown_endpoint(req: BreakdownRequest, response: Response, _=Depends(require_internal_key)):
+    return _guard_llm(response, task_planner.breakdown, req.title, req.description, req.now)
 
 
 @app.post("/plan-day", response_model=PlanDayResponse)
-def plan_day_endpoint(req: PlanDayRequest, _=Depends(require_internal_key)):
-    return _guard(task_planner.plan_day, req.tasks, req.schedules, req.now, req.workStart, req.workEnd)
+def plan_day_endpoint(req: PlanDayRequest, response: Response, _=Depends(require_internal_key)):
+    return _guard_llm(response, task_planner.plan_day, req.tasks, req.schedules, req.now, req.workStart, req.workEnd)
 
 
 @app.post("/prioritize", response_model=PrioritizeResponse)
-def prioritize_endpoint(req: PrioritizeRequest, _=Depends(require_internal_key)):
-    return _guard(task_planner.prioritize, req.tasks, req.now)
+def prioritize_endpoint(req: PrioritizeRequest, response: Response, _=Depends(require_internal_key)):
+    return _guard_llm(response, task_planner.prioritize, req.tasks, req.now)
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat_endpoint(req: ChatRequest, _=Depends(require_internal_key)):
-    return _guard(assistant.chat, req.message, req.context, req.history)
+def chat_endpoint(req: ChatRequest, response: Response, _=Depends(require_internal_key)):
+    return _guard_llm(response, assistant.chat, req.message, req.context, req.history)
 
 
 @app.post("/embed", response_model=EmbedResponse)

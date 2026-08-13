@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient  # noqa: E402
 import main  # noqa: E402
+import llm  # noqa: E402
 import summarizer  # noqa: E402
 import task_planner  # noqa: E402
 import assistant  # noqa: E402
@@ -165,6 +166,27 @@ def test_prioritize_empty():
     res = client.post("/prioritize", json={"tasks": []}, headers=KEY)
     assert res.status_code == 200
     assert res.json()["recommendations"] == []
+
+
+def test_usage_headers_reported(monkeypatch):
+    def fake(**kwargs):
+        llm.set_last_usage(120, 45, "claude-opus-4-8")
+        return {"key_points": ["a"], "summary": "s"}
+
+    monkeypatch.setattr(summarizer, "complete_json", fake)
+    res = client.post("/summarize", json={"text": "long note"}, headers=KEY)
+    assert res.status_code == 200
+    assert res.headers["X-AI-Input-Tokens"] == "120"
+    assert res.headers["X-AI-Output-Tokens"] == "45"
+    assert res.headers["X-AI-Model"] == "claude-opus-4-8"
+
+
+def test_usage_headers_absent_when_no_usage(monkeypatch):
+    # complete_json that never records usage (e.g. monkeypatched) -> no headers.
+    monkeypatch.setattr(summarizer, "complete_json", lambda **kwargs: {"key_points": [], "summary": "s"})
+    res = client.post("/summarize", json={"text": "x"}, headers=KEY)
+    assert res.status_code == 200
+    assert "X-AI-Output-Tokens" not in res.headers
 
 
 def test_chat_ok(monkeypatch):

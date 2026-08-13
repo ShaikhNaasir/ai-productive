@@ -17,6 +17,7 @@ router.post('/plan-day/accept', asyncHandler(ctrl.acceptPlan));
 router.post('/summarize', asyncHandler(ctrl.summarize));
 router.post('/prioritize', asyncHandler(ctrl.prioritize));
 router.post('/chat', asyncHandler(ctrl.chat));
+router.get('/usage', asyncHandler(ctrl.usage));
 router.post('/reindex', asyncHandler(ctrl.reindex));
 
 module.exports = router;

@@ -8,6 +8,7 @@ export const aiService = {
   planDay: () => api.post('/ai/plan-day').then((r) => r.data.blocks),
   acceptPlan: (blocks) => api.post('/ai/plan-day/accept', { blocks }).then((r) => r.data.schedules),
   prioritize: () => api.post('/ai/prioritize').then((r) => r.data.recommendations),
+  usage: () => api.get('/ai/usage').then((r) => r.data),
   chat: (message, history) => api.post('/ai/chat', { message, history }).then((r) => r.data.reply),
   reindex: () => api.post('/ai/reindex').then((r) => r.data),
 };

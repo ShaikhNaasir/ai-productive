@@ -10,6 +10,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **AI usage & cost monitoring (Roadmap C3).** The AI service now reports each
+  call's token usage on response headers (captured in `llm.py` via a ContextVar,
+  no schema change). The server attributes usage to the requesting user with
+  `AsyncLocalStorage` and records one `AiUsage` row per call, estimating USD cost
+  from an env-overridable per-model price table (`utils/aiCost.js`); recording is
+  best-effort and never breaks an AI call. `GET /api/ai/usage` returns per-user
+  totals, a per-endpoint breakdown, and the last 7 days of spend, surfaced as an
+  "AI usage & cost" card on the Analytics page.
+
 - **Shared tasks — client (Roadmap C2.2).** Each owned task gets a Share action
   opening a dialog to share by email with a VIEW or EDIT role, and to list/revoke
   existing shares. A new "Shared" tab loads tasks shared with you, showing the

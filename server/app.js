@@ -11,6 +11,7 @@ const config = require('./config/env');
 const routes = require('./routes');
 const { authLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/error');
+const { requestContext } = require('./middleware/requestContext');
 
 function createApp() {
   const app = express();
@@ -44,7 +45,7 @@ function createApp() {
     res.json({ name: 'Productivity Assistant API', version: '0.1.0' });
   });
 
-  app.use('/api', routes);
+  app.use('/api', requestContext, routes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -76,5 +76,9 @@ Split into two slices.
 - [x] **C2.1 — Sharing model + backend.** `TaskShare` (VIEW/EDIT, unique per task+user); `services/taskAccess.js` grants owner-or-shared access (subtasks inherit parent shares); endpoints `POST /api/tasks/:id/share`, `GET /:id/shares`, `DELETE /:id/share/:userId`, `GET /api/tasks/shared`; EDIT sharees can update/complete/break down, delete stays owner-only. Server 106 tests green, lint clean. Migration deferred (`db push`).
 - [x] **C2.2 — Client.** Per-task Share dialog (email + VIEW/EDIT role, list/revoke shares) + a "Shared" tab loading tasks shared with me; VIEW is read-only, EDIT can edit/complete, delete/share stay owner-only; owner badge shown. Client 19 tests green, lint clean, build OK.
 
-### C3 — AI usage & cost monitoring — skipped
-- [ ] Track tokens/cost per AI call; per-user dashboard tile. _Deferred by owner (2026-08-13) — not needed for now._
+### C3 — AI usage & cost monitoring ✅
+- [x] AI service reports token usage per call via response headers (`llm.py` ContextVar; `X-AI-Input/Output-Tokens`, `X-AI-Model`).
+- [x] Server attributes usage to the user via `AsyncLocalStorage` and records an `AiUsage` row per call (`utils/aiCost.js` estimates USD from an env-overridable price table); best-effort, never breaks a call.
+- [x] `GET /api/ai/usage` — per-user totals, per-endpoint breakdown, last-7-days spend; "AI usage & cost" card on Analytics.
+- [x] Tests: pytest usage headers (2) + `aiCost`/usage aggregation (Jest, 6) + Analytics card (Vitest, 1); `fakePrisma` gains `aiUsage`. ai-service 15 green, server 112 green, client 20 green, lint clean, build OK.
+- [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).

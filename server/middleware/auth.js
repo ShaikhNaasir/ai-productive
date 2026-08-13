@@ -2,6 +2,7 @@
 
 const { verifyToken } = require('../utils/jwt');
 const ApiError = require('../utils/ApiError');
+const { setUserId } = require('./requestContext');
 
 // Requires a valid Bearer token. Attaches { id, email } to req.user.
 function requireAuth(req, res, next) {
@@ -15,6 +16,7 @@ function requireAuth(req, res, next) {
   try {
     const payload = verifyToken(token);
     req.user = { id: payload.sub, email: payload.email };
+    setUserId(payload.sub);
     return next();
   } catch (err) {
     return next(ApiError.unauthorized('Invalid or expired token'));

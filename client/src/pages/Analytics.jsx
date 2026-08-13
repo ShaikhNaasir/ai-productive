@@ -12,6 +12,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { analyticsService } from '@/services/analyticsService';
+import { aiService } from '@/services/aiService';
 import { apiError } from '@/lib/api';
 import { formatDuration } from '@/lib/utils';
 import StatCard from '@/components/StatCard';
@@ -23,6 +24,7 @@ const SLICE_OPACITY = [0.9, 0.6, 0.35, 0.75, 0.5, 0.25];
 export default function Analytics() {
   const [summary, setSummary] = useState(null);
   const [trends, setTrends] = useState(null);
+  const [usage, setUsage] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -33,6 +35,12 @@ export default function Analytics() {
         setTrends(t);
       } catch (err) {
         setError(apiError(err, 'Failed to load analytics'));
+      }
+      // AI usage is best-effort — the dashboard still renders without it.
+      try {
+        setUsage(await aiService.usage());
+      } catch {
+        // ignore
       }
     })();
   }, []);
@@ -114,6 +122,34 @@ export default function Analytics() {
           </CardContent>
         </Card>
       </div>
+
+      {usage && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">AI usage &amp; cost</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <StatCard label="AI Calls" value={usage.callCount} />
+              <StatCard label="Est. Cost" value={`$${usage.totalCostUsd.toFixed(4)}`} />
+              <StatCard label="Input Tokens" value={usage.totalInputTokens.toLocaleString()} />
+              <StatCard label="Output Tokens" value={usage.totalOutputTokens.toLocaleString()} />
+            </div>
+            {usage.byEndpoint.length > 0 && (
+              <ul className="text-sm">
+                {usage.byEndpoint.map((e) => (
+                  <li key={e.endpoint} className="flex justify-between border-b py-1 last:border-0">
+                    <span className="font-mono text-xs">{e.endpoint}</span>
+                    <span className="text-muted-foreground">
+                      {e.calls} calls · ${e.costUsd.toFixed(4)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

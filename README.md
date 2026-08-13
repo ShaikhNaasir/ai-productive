@@ -37,6 +37,7 @@ backlog.
 | PWA — installable + offline shell (B3) | Installable app, offline app shell; service worker never caches API/private data | client `manifest.webmanifest` + `sw.js` |
 | Voice command capture (B4) | Speak a task in the "AI Add" box (Web Speech API); graceful fallback where unsupported | client `VoiceInput` → `POST /api/ai/tasks` |
 | Shared / team tasks (C2) | Share a task by email (VIEW/EDIT); "Shared" tab with role-based access; delete stays owner-only | `POST /api/tasks/:id/share`, `GET /api/tasks/shared` |
+| AI usage & cost monitoring (C3) | Per-call token usage attributed per user, estimated USD cost, Analytics card | `GET /api/ai/usage` |
 
 ## 🛠 Technologies Used
 
