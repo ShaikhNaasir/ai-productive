@@ -14,6 +14,8 @@ from schemas import (
     ParsedTask,
     BreakdownRequest,
     BreakdownResponse,
+    PlanDayRequest,
+    PlanDayResponse,
     PrioritizeRequest,
     PrioritizeResponse,
     ChatRequest,
@@ -71,6 +73,11 @@ def parse_task_endpoint(req: ParseTaskRequest, _=Depends(require_internal_key)):
 @app.post("/breakdown", response_model=BreakdownResponse)
 def breakdown_endpoint(req: BreakdownRequest, _=Depends(require_internal_key)):
     return _guard(task_planner.breakdown, req.title, req.description, req.now)
+
+
+@app.post("/plan-day", response_model=PlanDayResponse)
+def plan_day_endpoint(req: PlanDayRequest, _=Depends(require_internal_key)):
+    return _guard(task_planner.plan_day, req.tasks, req.schedules, req.now, req.workStart, req.workEnd)
 
 
 @app.post("/prioritize", response_model=PrioritizeResponse)

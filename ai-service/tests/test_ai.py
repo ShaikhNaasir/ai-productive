@@ -100,6 +100,48 @@ def test_breakdown_invalid_json(monkeypatch):
     assert res.status_code == 502
 
 
+def test_plan_day_ok(monkeypatch):
+    monkeypatch.setattr(
+        task_planner,
+        "complete_json",
+        lambda **kwargs: {
+            "blocks": [
+                {
+                    "title": "Interview prep",
+                    "startTime": "2026-08-13T09:00:00Z",
+                    "endTime": "2026-08-13T10:00:00Z",
+                    "taskId": "1",
+                    "reason": "due soon",
+                },
+                # Dropped: missing/invalid endTime.
+                {"title": "bad block", "startTime": "2026-08-13T10:00:00Z", "endTime": "not-a-date"},
+            ]
+        },
+    )
+    res = client.post(
+        "/plan-day",
+        json={
+            "tasks": [{"id": "1", "title": "Interview prep", "dueDate": "2026-08-14"}],
+            "schedules": [{"title": "Standup", "startTime": "2026-08-13T11:00:00Z"}],
+            "now": "2026-08-13T08:00:00Z",
+        },
+        headers=KEY,
+    )
+    assert res.status_code == 200
+    blocks = res.json()["blocks"]
+    assert len(blocks) == 1  # invalid block filtered out
+    assert blocks[0]["title"] == "Interview prep"
+
+
+def test_plan_day_invalid_json(monkeypatch):
+    def boom(**kwargs):
+        raise ValueError("Model did not return valid JSON")
+
+    monkeypatch.setattr(task_planner, "complete_json", boom)
+    res = client.post("/plan-day", json={"tasks": [], "schedules": []}, headers=KEY)
+    assert res.status_code == 502
+
+
 def test_prioritize_ok(monkeypatch):
     monkeypatch.setattr(
         task_planner,

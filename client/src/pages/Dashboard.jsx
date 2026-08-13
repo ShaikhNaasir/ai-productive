@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
 import StatCard from '@/components/StatCard';
+import PlanMyDay from '@/components/PlanMyDay';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -37,6 +38,8 @@ export default function Dashboard() {
         <StatCard label="Overdue" value={summary?.overdue ?? '—'} />
         <StatCard label="Completion" value={summary ? `${summary.completionRate}%` : '—'} />
       </div>
+
+      <PlanMyDay />
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">

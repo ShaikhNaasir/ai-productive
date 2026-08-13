@@ -52,6 +52,32 @@ class PrioritizeResponse(BaseModel):
     recommendations: list[PriorityRecommendation]
 
 
+class ScheduleContext(BaseModel):
+    title: str
+    startTime: str
+    endTime: Optional[str] = None
+
+
+class PlanDayRequest(BaseModel):
+    tasks: list[TaskForPrioritization] = []
+    schedules: list[ScheduleContext] = []
+    now: Optional[str] = None
+    workStart: int = 9
+    workEnd: int = 17
+
+
+class PlanBlock(BaseModel):
+    title: str
+    startTime: str
+    endTime: str
+    taskId: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class PlanDayResponse(BaseModel):
+    blocks: list[PlanBlock]
+
+
 class BreakdownRequest(BaseModel):
     title: str = Field(min_length=1)
     description: Optional[str] = None

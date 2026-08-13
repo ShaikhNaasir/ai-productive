@@ -20,6 +20,19 @@ const chatSchema = z.object({
 const breakdownSchema = z.object({
   subtasks: z.array(z.string().trim().min(1).max(300)).max(7),
 });
+// Proposed day-plan blocks are validated before persisting as schedule entries.
+const planBlockSchema = z
+  .object({
+    title: z.string().trim().min(1).max(300),
+    startTime: z.coerce.date(),
+    endTime: z.coerce.date().optional().nullable(),
+    reason: z.string().max(5000).optional().nullable(),
+  })
+  .refine((b) => !b.endTime || b.endTime >= b.startTime, {
+    message: 'endTime must be after startTime',
+    path: ['endTime'],
+  });
+const acceptPlanSchema = z.object({ blocks: z.array(planBlockSchema).min(1).max(20) });
 
 // Parse a natural-language instruction into a structured task (no persistence).
 async function parseTask(req, res) {
@@ -69,6 +82,64 @@ async function breakdownTask(req, res) {
     subtasks.push(created);
   }
   res.status(201).json({ task, subtasks });
+}
+
+// Gather the user's open tasks + today's commitments and ask the AI to build a
+// time-blocked plan. Non-persisting — the client reviews then calls acceptPlan.
+async function planDay(req, res) {
+  const userId = req.user.id;
+  const now = new Date();
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const [tasks, schedules] = await Promise.all([
+    prisma.task.findMany({
+      where: { userId, status: { not: 'COMPLETED' } },
+      orderBy: { dueDate: 'asc' },
+    }),
+    prisma.schedule.findMany({
+      where: { userId, startTime: { gte: startOfDay, lte: endOfDay } },
+      orderBy: { startTime: 'asc' },
+    }),
+  ]);
+
+  const result = await aiClient.planDay({
+    tasks: tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+      priority: t.priority,
+      status: t.status,
+    })),
+    schedules: schedules.map((s) => ({
+      title: s.title,
+      startTime: s.startTime.toISOString(),
+      endTime: s.endTime ? s.endTime.toISOString() : null,
+    })),
+    now: now.toISOString(),
+  });
+  res.json(result);
+}
+
+// Persist accepted plan blocks as schedule entries for the current user.
+async function acceptPlan(req, res) {
+  const { blocks } = acceptPlanSchema.parse(req.body);
+  const schedules = [];
+  for (const b of blocks) {
+    const schedule = await prisma.schedule.create({
+      data: {
+        userId: req.user.id,
+        title: b.title,
+        description: b.reason || null,
+        startTime: b.startTime,
+        endTime: b.endTime || null,
+      },
+    });
+    schedules.push(schedule);
+  }
+  res.status(201).json({ schedules });
 }
 
 async function summarize(req, res) {
@@ -148,4 +219,4 @@ async function reindex(req, res) {
   res.json({ indexed: tasks.length + notes.length });
 }
 
-module.exports = { parseTask, createTaskFromText, breakdownTask, summarize, prioritize, chat, reindex };
+module.exports = { parseTask, createTaskFromText, breakdownTask, planDay, acceptPlan, summarize, prioritize, chat, reindex };

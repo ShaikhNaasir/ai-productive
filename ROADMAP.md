@@ -35,11 +35,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 - [x] Tests: `focus.test.js` (7) + analytics focus (1) + `PomodoroTimer` (2); `fakePrisma` gains `focusSession`. Server 69 green, client green, lint clean, build OK.
 - [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).
 
-### A4 — AI Daily Planner ("Plan my day")
-- [ ] AI service: `/plan-day` — build a time-blocked schedule from open tasks + calendar + priorities; schema-validated blocks.
-- [ ] Server: `/api/ai/plan-day` gathers context, returns/persists suggested blocks; graceful 503 fallback.
-- [ ] Client: "Plan my day" panel (accept → creates schedule entries).
-- [ ] Tests: ai-service + server + client.
+### A4 — AI Daily Planner ("Plan my day") ✅
+- [x] AI service: `/plan-day` — time-blocked schedule from open tasks + today's commitments, work-hours aware; blocks validated (title + parseable ISO start/end), invalid dropped.
+- [x] Server: `POST /api/ai/plan-day` gathers open tasks + today's schedules (non-persisting); `POST /api/ai/plan-day/accept` zod-validates blocks before persisting them as `Schedule` rows; graceful 503 via `aiClient`.
+- [x] Client: `PlanMyDay` panel on Dashboard — generate → review blocks → "Accept & add to calendar".
+- [x] Tests: ai-service (2) + server ai plan-day/accept (4) + client `PlanMyDay` (1). ai-service 13 green, server 73 green, client green, lint clean, build OK.
 
 ## Tier B — moderate effort
 

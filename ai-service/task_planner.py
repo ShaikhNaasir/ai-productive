@@ -5,8 +5,11 @@ from llm import complete_json
 from schemas import (
     BreakdownResponse,
     ParsedTask,
+    PlanBlock,
+    PlanDayResponse,
     PrioritizeResponse,
     PriorityRecommendation,
+    ScheduleContext,
     TaskForPrioritization,
 )
 
@@ -39,8 +42,73 @@ PRIORITIZE_SYSTEM = (
 )
 
 
+PLAN_DAY_SYSTEM = (
+    "You are a productivity assistant building a realistic time-blocked plan for the "
+    "user's day. Schedule the user's open tasks into focused blocks between the given "
+    "work hours, working AROUND their existing calendar commitments (never overlap "
+    "them). Order blocks by priority and deadline, keep blocks 25-90 minutes, and add "
+    "short breaks only if helpful. Every block's start and end must be ISO-8601 "
+    "date-times on the current day within work hours. "
+    "Respond ONLY with JSON of this shape: "
+    '{"blocks": [{"title": string, "startTime": ISO-8601, "endTime": ISO-8601, '
+    '"taskId": string|null, "reason": string}]}. '
+    "Order blocks chronologically."
+)
+
+
 def _now_iso(now: str | None) -> str:
     return now or datetime.now(timezone.utc).isoformat()
+
+
+def _valid_iso(value) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return True
+    except ValueError:
+        return False
+
+
+def plan_day(
+    tasks: list[TaskForPrioritization],
+    schedules: list[ScheduleContext],
+    now: str | None = None,
+    work_start: int = 9,
+    work_end: int = 17,
+) -> PlanDayResponse:
+    system = (
+        f"{PLAN_DAY_SYSTEM}\nCurrent date-time (ISO 8601): {_now_iso(now)}\n"
+        f"Work hours: {work_start:02d}:00 to {work_end:02d}:00 (local)."
+    )
+    task_lines = "\n".join(
+        f"- id={t.id or ''} | {t.title} | priority={t.priority or 'NONE'} | "
+        f"due={t.dueDate or 'none'} | status={t.status or 'none'}"
+        for t in tasks
+    ) or "(no open tasks)"
+    sched_lines = "\n".join(
+        f"- {s.title} | {s.startTime} -> {s.endTime or 'open'}" for s in schedules
+    ) or "(no existing commitments)"
+    user = f"OPEN TASKS:\n{task_lines}\n\nEXISTING COMMITMENTS TODAY:\n{sched_lines}"
+
+    data = complete_json(system=system, user=user, max_tokens=1500)
+    blocks = []
+    for b in data.get("blocks", []):
+        start = b.get("startTime")
+        end = b.get("endTime")
+        title = str(b.get("title", "")).strip()
+        if not title or not _valid_iso(start) or not _valid_iso(end):
+            continue
+        blocks.append(
+            PlanBlock(
+                title=title[:300],
+                startTime=start,
+                endTime=end,
+                taskId=b.get("taskId") or None,
+                reason=str(b.get("reason", "")).strip() or None,
+            )
+        )
+    return PlanDayResponse(blocks=blocks[:20])
 
 
 def parse_task(text: str, now: str | None = None) -> ParsedTask:

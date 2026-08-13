@@ -8,6 +8,7 @@ jest.mock('../models/prisma', () => {
 jest.mock('../services/aiClient', () => ({
   parseTask: jest.fn(),
   breakdown: jest.fn(),
+  planDay: jest.fn(),
   summarize: jest.fn(),
   prioritize: jest.fn(),
   chat: jest.fn(),
@@ -77,6 +78,49 @@ describe('AI wiring', () => {
     const parent = await request(app).post('/api/tasks').set(auth()).send({ title: 'Down task' });
     aiClient.breakdown.mockRejectedValue(new ApiError(503, 'AI service is unavailable.'));
     const res = await request(app).post(`/api/ai/tasks/${parent.body.task.id}/breakdown`).set(auth());
+    expect(res.status).toBe(503);
+  });
+
+  test('plan-day gathers context and returns proposed blocks', async () => {
+    await request(app).post('/api/tasks').set(auth()).send({ title: 'Write spec' });
+    aiClient.planDay.mockResolvedValue({
+      blocks: [
+        { title: 'Write spec', startTime: '2026-08-13T09:00:00Z', endTime: '2026-08-13T10:00:00Z', reason: 'focus' },
+      ],
+    });
+    const res = await request(app).post('/api/ai/plan-day').set(auth());
+    expect(res.status).toBe(200);
+    expect(res.body.blocks[0].title).toBe('Write spec');
+    // Controller passes gathered tasks to the AI client.
+    const arg = aiClient.planDay.mock.calls.at(-1)[0];
+    expect(Array.isArray(arg.tasks)).toBe(true);
+  });
+
+  test('plan-day/accept persists blocks as schedule entries', async () => {
+    const blocks = [
+      { title: 'Deep work', startTime: '2026-08-13T09:00:00Z', endTime: '2026-08-13T10:30:00Z', reason: 'top priority' },
+    ];
+    const res = await request(app).post('/api/ai/plan-day/accept').set(auth()).send({ blocks });
+    expect(res.status).toBe(201);
+    expect(res.body.schedules).toHaveLength(1);
+    expect(res.body.schedules[0].id).toBeTruthy();
+
+    const list = await request(app).get('/api/schedules').set(auth());
+    expect(list.body.schedules.some((s) => s.title === 'Deep work')).toBe(true);
+  });
+
+  test('plan-day/accept rejects an invalid block', async () => {
+    const res = await request(app)
+      .post('/api/ai/plan-day/accept')
+      .set(auth())
+      .send({ blocks: [{ title: '', startTime: '2026-08-13T09:00:00Z' }] });
+    expect(res.status).toBe(400);
+  });
+
+  test('plan-day returns 503 when AI service is down', async () => {
+    const ApiError = require('../utils/ApiError');
+    aiClient.planDay.mockRejectedValue(new ApiError(503, 'AI service is unavailable.'));
+    const res = await request(app).post('/api/ai/plan-day').set(auth());
     expect(res.status).toBe(503);
   });
 
