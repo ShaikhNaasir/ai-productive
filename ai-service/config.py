@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.6-flash"
+    # Gemini 3.x are thinking models; "minimal" keeps reasoning (and its token
+    # cost) low so the output budget is spent on the answer. Blank disables it.
+    gemini_thinking_level: str = "minimal"
     # auto = pick the first configured provider (anthropic > openai > gemini).
     llm_provider: str = "auto"
     embedding_model: str = "voyage-3"

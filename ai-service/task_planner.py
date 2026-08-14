@@ -91,7 +91,9 @@ def plan_day(
     ) or "(no existing commitments)"
     user = f"OPEN TASKS:\n{task_lines}\n\nEXISTING COMMITMENTS TODAY:\n{sched_lines}"
 
-    data = complete_json(system=system, user=user, max_tokens=1500)
+    # Right-size the output budget to the number of tasks being scheduled.
+    max_tokens = min(4096, 256 + 160 * max(len(tasks), 1))
+    data = complete_json(system=system, user=user, max_tokens=max_tokens, response_schema=PlanDayResponse)
     blocks = []
     for b in data.get("blocks", []):
         start = b.get("startTime")
@@ -113,7 +115,7 @@ def plan_day(
 
 def parse_task(text: str, now: str | None = None) -> ParsedTask:
     system = f"{PARSE_SYSTEM}\nCurrent date-time (ISO 8601): {_now_iso(now)}"
-    data = complete_json(system=system, user=text, max_tokens=500)
+    data = complete_json(system=system, user=text, max_tokens=512, response_schema=ParsedTask)
     priority = str(data.get("priority", "MEDIUM")).upper()
     if priority not in ("LOW", "MEDIUM", "HIGH"):
         priority = "MEDIUM"
@@ -129,7 +131,7 @@ def parse_task(text: str, now: str | None = None) -> ParsedTask:
 def breakdown(title: str, description: str | None = None, now: str | None = None) -> BreakdownResponse:
     system = f"{BREAKDOWN_SYSTEM}\nCurrent date-time (ISO 8601): {_now_iso(now)}"
     user = title if not description else f"{title}\n\n{description}"
-    data = complete_json(system=system, user=user, max_tokens=600)
+    data = complete_json(system=system, user=user, max_tokens=512, response_schema=BreakdownResponse)
     subtasks = []
     for s in data.get("subtasks", []):
         text = str(s).strip()[:300]
@@ -147,7 +149,9 @@ def prioritize(tasks: list[TaskForPrioritization], now: str | None = None) -> Pr
         f"due={t.dueDate or 'none'} | status={t.status or 'none'}"
         for t in tasks
     )
-    data = complete_json(system=system, user=user, max_tokens=1200)
+    # Right-size the output budget to the number of tasks being ranked.
+    max_tokens = min(4096, 256 + 160 * len(tasks))
+    data = complete_json(system=system, user=user, max_tokens=max_tokens, response_schema=PrioritizeResponse)
     recs = []
     for r in data.get("recommendations", []):
         pr = str(r.get("priority", "MEDIUM")).upper()

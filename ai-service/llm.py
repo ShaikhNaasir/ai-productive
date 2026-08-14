@@ -6,11 +6,14 @@ monkeypatch `complete_text` without any network access. Raises `LLMUnavailable`
 when no provider is configured, which callers translate into a graceful 503.
 """
 import json
+import logging
 import re
 from contextvars import ContextVar
-from typing import Optional
+from typing import Any, Optional
 
 from config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMUnavailable(RuntimeError):
@@ -39,7 +42,9 @@ def get_last_usage() -> Optional[dict]:
 _clients: dict = {}
 
 
-def _anthropic_complete(system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool) -> str:
+def _anthropic_complete(
+    system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool, response_schema: Any = None
+) -> str:
     settings = get_settings()
     import anthropic
 
@@ -62,7 +67,9 @@ def _anthropic_complete(system: str, user: str, model: Optional[str], max_tokens
     return "".join(block.text for block in resp.content if getattr(block, "type", None) == "text")
 
 
-def _openai_complete(system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool) -> str:
+def _openai_complete(
+    system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool, response_schema: Any = None
+) -> str:
     settings = get_settings()
     import openai
 
@@ -90,17 +97,20 @@ def _openai_complete(system: str, user: str, model: Optional[str], max_tokens: i
 
 
 def _gemini_text(resp) -> str:
-    """Extract text from a Gemini response without the throwing ``.text`` accessor.
+    """Extract the answer text from a Gemini response without ``.text``.
 
     Gemini's ``response.text`` quick-accessor raises whenever the candidate's
     ``finish_reason`` isn't ``STOP`` (e.g. ``MAX_TOKENS`` or ``SAFETY``), which
-    made long/edge generations surface as opaque failures. Join the text parts
-    ourselves and, when there are none, raise a message that names the reason.
+    made long/edge generations surface as opaque failures. Join the answer parts
+    ourselves (skipping thinking-summary parts, which carry ``thought=True``) and,
+    when there are none, raise a message that names the reason.
     """
     for cand in getattr(resp, "candidates", None) or []:
         content = getattr(cand, "content", None)
         parts = getattr(content, "parts", None) or [] if content is not None else []
-        text = "".join(getattr(p, "text", "") or "" for p in parts)
+        text = "".join(
+            getattr(p, "text", "") or "" for p in parts if not getattr(p, "thought", False)
+        )
         if text:
             return text
     feedback = getattr(resp, "prompt_feedback", None)
@@ -112,29 +122,51 @@ def _gemini_text(resp) -> str:
     raise ValueError(f"Gemini returned no text (finish_reason={finish})")
 
 
-def _gemini_complete(system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool) -> str:
+def _gemini_complete(
+    system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool, response_schema: Any = None
+) -> str:
     settings = get_settings()
     used_model = model or settings.gemini_model
-    import google.generativeai as genai
-    from google.api_core import exceptions as google_exceptions
+    from google import genai
+    from google.genai import errors as genai_errors
 
-    genai.configure(api_key=settings.gemini_api_key)
-    gen_config = {"max_output_tokens": max_tokens}
+    if "gemini" not in _clients:
+        _clients["gemini"] = genai.Client(api_key=settings.gemini_api_key)
+
+    config: dict = {"system_instruction": system, "max_output_tokens": max_tokens}
+    level = (settings.gemini_thinking_level or "").strip()
+    if level:
+        # Keep reasoning (and its token cost) low on Gemini 3.x thinking models.
+        config["thinking_config"] = {"thinking_level": level}
     if json_mode:
         # Native JSON mode: no code fences or prose, so fewer wasted output tokens.
-        gen_config["response_mime_type"] = "application/json"
-    gmodel = genai.GenerativeModel(model_name=used_model, system_instruction=system)
+        config["response_mime_type"] = "application/json"
+        if response_schema is not None:
+            # Structured output: constrain generation to the exact response shape.
+            config["response_schema"] = response_schema
+
     try:
-        resp = gmodel.generate_content(user, generation_config=gen_config)
-    except google_exceptions.GoogleAPIError as exc:
+        resp = _clients["gemini"].models.generate_content(
+            model=used_model, contents=user, config=config
+        )
+    except genai_errors.APIError as exc:
         raise LLMUnavailable(f"Gemini request failed for model '{used_model}': {exc}") from exc
+
     usage = getattr(resp, "usage_metadata", None)
+    thoughts = 0
     if usage is not None:
+        thoughts = getattr(usage, "thoughts_token_count", 0) or 0
+        # Thinking tokens are billed as output, so fold them in for accurate cost.
         set_last_usage(
             getattr(usage, "prompt_token_count", 0) or 0,
-            getattr(usage, "candidates_token_count", 0) or 0,
+            (getattr(usage, "candidates_token_count", 0) or 0) + thoughts,
             used_model,
         )
+    candidates = getattr(resp, "candidates", None) or []
+    finish = getattr(candidates[0], "finish_reason", None) if candidates else None
+    logger.info(
+        "gemini call model=%s finish_reason=%s thoughts_tokens=%s", used_model, finish, thoughts
+    )
     return _gemini_text(resp)
 
 
@@ -146,12 +178,20 @@ _PROVIDERS = {
 
 
 def complete_text(
-    system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024, json_mode: bool = False
+    system: str,
+    user: str,
+    model: Optional[str] = None,
+    max_tokens: int = 1024,
+    json_mode: bool = False,
+    response_schema: Any = None,
 ) -> str:
     """Return the assistant's text response for a single-turn prompt.
 
     Set ``json_mode`` to have providers that support it emit raw JSON (no code
     fences / prose), which cuts wasted output tokens and makes parsing reliable.
+    Pass ``response_schema`` (a Pydantic model / JSON schema) to additionally
+    constrain the output shape on providers that support structured output
+    (Gemini); it is ignored where unsupported.
     """
     settings = get_settings()
     provider = settings.active_provider
@@ -159,7 +199,7 @@ def complete_text(
         raise LLMUnavailable(
             "No LLM provider configured — set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY"
         )
-    return _PROVIDERS[provider](system, user, model, max_tokens, json_mode)
+    return _PROVIDERS[provider](system, user, model, max_tokens, json_mode, response_schema)
 
 
 def _extract_json(text: str) -> str:
@@ -173,9 +213,13 @@ def _extract_json(text: str) -> str:
     return text
 
 
-def complete_json(system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024) -> dict:
+def complete_json(
+    system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024, response_schema: Any = None
+) -> dict:
     """Ask the model for JSON and parse it. Raises ValueError on unparseable output."""
-    raw = complete_text(system=system, user=user, model=model, max_tokens=max_tokens, json_mode=True)
+    raw = complete_text(
+        system=system, user=user, model=model, max_tokens=max_tokens, json_mode=True, response_schema=response_schema
+    )
     try:
         return json.loads(_extract_json(raw))
     except json.JSONDecodeError as exc:

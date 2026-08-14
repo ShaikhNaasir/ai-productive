@@ -276,76 +276,100 @@ def test_gemini_text_raises_on_blocked_prompt():
 
 # The provider SDKs aren't installed in the test venv (and tests must not need
 # network), so inject fake modules that expose just the surface llm.py touches.
-def _install_fake_gemini(monkeypatch, generative_model_cls):
+# We use the new google-genai SDK: `from google import genai` /
+# `client.models.generate_content(...)` / `from google.genai import errors`.
+def _install_fake_genai(monkeypatch, generate_fn):
     google_pkg = types.ModuleType("google")
-    genai = types.ModuleType("google.generativeai")
-    genai.configure = lambda **k: None
-    genai.GenerativeModel = generative_model_cls
-    api_core = types.ModuleType("google.api_core")
-    exceptions = types.ModuleType("google.api_core.exceptions")
+    genai = types.ModuleType("google.genai")
+    errors = types.ModuleType("google.genai.errors")
 
-    class GoogleAPIError(Exception):
+    class APIError(Exception):
         pass
 
-    class NotFound(GoogleAPIError):
-        pass
+    errors.APIError = APIError
 
-    exceptions.GoogleAPIError = GoogleAPIError
-    exceptions.NotFound = NotFound
-    google_pkg.generativeai = genai
-    google_pkg.api_core = api_core
-    api_core.exceptions = exceptions
+    class FakeClient:
+        def __init__(self, api_key=None):
+            self.models = types.SimpleNamespace(generate_content=generate_fn)
+
+    genai.Client = FakeClient
+    genai.errors = errors
+    google_pkg.genai = genai
     for name, mod in {
         "google": google_pkg,
-        "google.generativeai": genai,
-        "google.api_core": api_core,
-        "google.api_core.exceptions": exceptions,
+        "google.genai": genai,
+        "google.genai.errors": errors,
     }.items():
         monkeypatch.setitem(sys.modules, name, mod)
-    return exceptions
+    # A previously cached real/fake client would bypass our fake, so reset it.
+    monkeypatch.setitem(llm._clients, "gemini", FakeClient())
+    return errors
 
 
-def test_gemini_complete_uses_json_mode_and_records_usage(monkeypatch):
+def test_gemini_text_skips_thought_parts():
+    thought = types.SimpleNamespace(text="reasoning...", thought=True)
+    answer = types.SimpleNamespace(text='{"ok":1}', thought=False)
+    resp = _gemini_resp([_candidate([thought, answer], finish_reason="STOP")])
+    assert llm._gemini_text(resp) == '{"ok":1}'
+
+
+def test_gemini_complete_uses_json_mode_schema_and_records_usage(monkeypatch):
     captured = {}
+    schema = object()  # opaque marker to assert it is forwarded unchanged
 
-    class FakeModel:
-        def __init__(self, model_name, system_instruction):
-            captured["model_name"] = model_name
+    def generate_content(model=None, contents=None, config=None):
+        captured["model"] = model
+        captured["config"] = config
+        return _gemini_resp(
+            [_candidate([_part('{"ok": true}')], finish_reason="STOP")],
+            usage=types.SimpleNamespace(
+                prompt_token_count=10, candidates_token_count=5, thoughts_token_count=3
+            ),
+        )
 
-        def generate_content(self, user, generation_config=None):
-            captured["gen_config"] = generation_config
-            return _gemini_resp(
-                [_candidate([_part('{"ok": true}')], finish_reason="STOP")],
-                usage=types.SimpleNamespace(prompt_token_count=10, candidates_token_count=5),
-            )
-
-    _install_fake_gemini(monkeypatch, FakeModel)
-    monkeypatch.setattr(llm, "get_settings", lambda: _settings(gemini_api_key="g", gemini_model="gemini-2.5-flash"))
+    _install_fake_genai(monkeypatch, generate_content)
+    monkeypatch.setattr(llm, "get_settings", lambda: _settings(gemini_api_key="g", gemini_model="gemini-3.6-flash"))
 
     llm.reset_usage()
-    out = llm._gemini_complete("sys", "user", None, 256, True)
+    out = llm._gemini_complete("sys", "user", None, 256, True, response_schema=schema)
     assert out == '{"ok": true}'
-    assert captured["model_name"] == "gemini-2.5-flash"
-    assert captured["gen_config"]["response_mime_type"] == "application/json"
-    assert captured["gen_config"]["max_output_tokens"] == 256
-    assert llm.get_last_usage()["input_tokens"] == 10
+    assert captured["model"] == "gemini-3.6-flash"
+    cfg = captured["config"]
+    assert cfg["response_mime_type"] == "application/json"
+    assert cfg["response_schema"] is schema
+    assert cfg["max_output_tokens"] == 256
+    assert cfg["thinking_config"] == {"thinking_level": "minimal"}
+    usage = llm.get_last_usage()
+    assert usage["input_tokens"] == 10
+    assert usage["output_tokens"] == 8  # candidates(5) + thoughts(3), billed together
+
+
+def test_gemini_thinking_level_env_overridable(monkeypatch):
+    captured = {}
+
+    def generate_content(model=None, contents=None, config=None):
+        captured["config"] = config
+        return _gemini_resp([_candidate([_part("{}")], finish_reason="STOP")])
+
+    _install_fake_genai(monkeypatch, generate_content)
+    # Blank level -> no thinking_config sent at all.
+    monkeypatch.setattr(
+        llm, "get_settings", lambda: _settings(gemini_api_key="g", gemini_thinking_level="")
+    )
+    llm._gemini_complete("sys", "user", None, 128, True)
+    assert "thinking_config" not in captured["config"]
 
 
 def test_gemini_complete_invalid_model_raises_unavailable(monkeypatch):
-    # A bad GEMINI_MODEL (e.g. the non-existent "gemini-3.6-flash") -> graceful 503,
-    # not an opaque 500.
+    # A bad GEMINI_MODEL or transient API failure -> graceful 503, not an opaque 500.
     holder = {}
 
-    class BoomModel:
-        def __init__(self, **kwargs):
-            pass
+    def generate_content(model=None, contents=None, config=None):
+        raise holder["APIError"]("models/does-not-exist is not found")
 
-        def generate_content(self, *a, **k):
-            raise holder["NotFound"]("models/gemini-3.6-flash is not found")
-
-    exceptions = _install_fake_gemini(monkeypatch, BoomModel)
-    holder["NotFound"] = exceptions.NotFound
-    monkeypatch.setattr(llm, "get_settings", lambda: _settings(gemini_api_key="g", gemini_model="gemini-3.6-flash"))
+    errors = _install_fake_genai(monkeypatch, generate_content)
+    holder["APIError"] = errors.APIError
+    monkeypatch.setattr(llm, "get_settings", lambda: _settings(gemini_api_key="g"))
 
     with pytest.raises(llm.LLMUnavailable):
         llm._gemini_complete("sys", "user", None, 256, True)

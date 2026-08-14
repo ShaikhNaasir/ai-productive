@@ -11,7 +11,7 @@ SYSTEM = (
 
 
 def summarize(text: str) -> SummarizeResponse:
-    data = complete_json(system=SYSTEM, user=text, max_tokens=800)
+    data = complete_json(system=SYSTEM, user=text, max_tokens=768, response_schema=SummarizeResponse)
     key_points = [str(p) for p in data.get("key_points", []) if str(p).strip()]
     summary = str(data.get("summary", "")).strip()
     return SummarizeResponse(key_points=key_points, summary=summary)

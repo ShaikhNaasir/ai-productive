@@ -74,7 +74,9 @@ services:
       - key: GEMINI_API_KEY
         sync: false          # optional alternative provider
       - key: GEMINI_MODEL
-        value: gemini-2.0-flash
+        value: gemini-3.6-flash
+      - key: GEMINI_THINKING_LEVEL
+        value: minimal         # Gemini 3.x thinking level; blank to disable
       - key: VOYAGE_API_KEY
         sync: false          # optional (semantic search)
       - key: EMBEDDING_MODEL

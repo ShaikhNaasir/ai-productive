@@ -13,24 +13,34 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 - **Gemini failures now degrade gracefully instead of surfacing as "invalid".**
   `_gemini_complete` no longer uses Gemini's throwing `response.text` accessor,
   which raised whenever a candidate's `finish_reason` wasn't `STOP` (e.g.
-  `MAX_TOKENS` or `SAFETY`) — making long/edge generations fail intermittently.
-  A new `_gemini_text` helper joins the response's text parts, returns partial
-  output on truncation, and otherwise raises an error naming the finish/block
-  reason. Provider API errors (invalid key, unknown model, quota) from all three
-  providers are now caught and re-raised as `LLMUnavailable`, so the server
-  degrades to a 503 with a clear message rather than an opaque 500. A wrong
-  `GEMINI_MODEL` (there is no `gemini-3.6-flash`; use `gemini-2.5-flash` or
-  `gemini-2.0-flash`) now reports cleanly.
+  `MAX_TOKENS` or `SAFETY`) — making long/edge generations fail intermittently
+  while short ones worked. A new `_gemini_text` helper joins the response's answer
+  parts (skipping thinking-summary parts), returns partial output on truncation,
+  and otherwise raises an error naming the finish/block reason. Provider API
+  errors (invalid key, unknown model, quota) from all three providers are now
+  caught and re-raised as `LLMUnavailable`, so the server degrades to a 503 with a
+  clear message rather than an opaque 500.
 
 ### Changed
 
-- **Strict JSON mode cuts wasted tokens.** `complete_json` now requests native
-  JSON output where the provider supports it — Gemini `response_mime_type:
-  application/json`, OpenAI `response_format: {type: json_object}` — so responses
-  arrive without code fences or prose, trimming output tokens and making parsing
-  reliable (the fence-stripping fallback in `_extract_json` remains as a safety
-  net). Anthropic is unchanged (no JSON-mode flag; its prompt already constrains
-  the shape).
+- **Migrated Gemini to the `google-genai` SDK and tuned it for Gemini 3.x.**
+  `_gemini_complete` now uses the unified `google-genai` client
+  (`client.models.generate_content`). Because Gemini 3.x are thinking models
+  whose reasoning tokens consume the output budget, the AI service now sends
+  `thinking_level` (env `GEMINI_THINKING_LEVEL`, default `minimal`) to keep that
+  cost low, right-sizes `max_output_tokens` per endpoint (scaling with item count
+  for prioritize/plan-day) instead of blanket caps, and folds `thoughts_token_count`
+  into reported output tokens so cost monitoring stays accurate. Each call logs
+  its `finish_reason` and thinking-token count. Dep `google-generativeai` →
+  `google-genai`; default `GEMINI_MODEL` is now `gemini-3.6-flash`.
+
+- **Strict JSON + structured output cuts wasted tokens.** `complete_json` now
+  requests native JSON where the provider supports it — Gemini `response_mime_type:
+  application/json`, OpenAI `response_format: {type: json_object}` — and passes a
+  `response_schema` (the endpoint's Pydantic response model) to Gemini so output is
+  constrained to the exact shape. Responses arrive without code fences or prose,
+  trimming output tokens and making parsing reliable (the `_extract_json` fence
+  fallback remains as a safety net). Anthropic is unchanged (no JSON-mode flag).
 
 ### Added
 
@@ -41,7 +51,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   or forces one. `llm.py` dispatches `complete_text`/`complete_json` to the active
   provider (each SDK lazily imported), and each records token usage for cost
   monitoring (C3). Embeddings/semantic search stay on Voyage (the DB vector column
-  is fixed at 1024 dimensions). New deps: `openai`, `google-generativeai`.
+  is fixed at 1024 dimensions). New deps: `openai`, `google-genai`.
 
 - **AI usage & cost monitoring (Roadmap C3).** The AI service now reports each
   call's token usage on response headers (captured in `llm.py` via a ContextVar,
