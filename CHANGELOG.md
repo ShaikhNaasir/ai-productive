@@ -8,6 +8,30 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Gemini failures now degrade gracefully instead of surfacing as "invalid".**
+  `_gemini_complete` no longer uses Gemini's throwing `response.text` accessor,
+  which raised whenever a candidate's `finish_reason` wasn't `STOP` (e.g.
+  `MAX_TOKENS` or `SAFETY`) — making long/edge generations fail intermittently.
+  A new `_gemini_text` helper joins the response's text parts, returns partial
+  output on truncation, and otherwise raises an error naming the finish/block
+  reason. Provider API errors (invalid key, unknown model, quota) from all three
+  providers are now caught and re-raised as `LLMUnavailable`, so the server
+  degrades to a 503 with a clear message rather than an opaque 500. A wrong
+  `GEMINI_MODEL` (there is no `gemini-3.6-flash`; use `gemini-2.5-flash` or
+  `gemini-2.0-flash`) now reports cleanly.
+
+### Changed
+
+- **Strict JSON mode cuts wasted tokens.** `complete_json` now requests native
+  JSON output where the provider supports it — Gemini `response_mime_type:
+  application/json`, OpenAI `response_format: {type: json_object}` — so responses
+  arrive without code fences or prose, trimming output tokens and making parsing
+  reliable (the fence-stripping fallback in `_extract_json` remains as a safety
+  net). Anthropic is unchanged (no JSON-mode flag; its prompt already constrains
+  the shape).
+
 ### Added
 
 - **Multi-provider LLM (Anthropic / OpenAI / Gemini).** The AI service's

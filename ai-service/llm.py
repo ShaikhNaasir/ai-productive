@@ -39,33 +39,37 @@ def get_last_usage() -> Optional[dict]:
 _clients: dict = {}
 
 
-def _anthropic_complete(system: str, user: str, model: Optional[str], max_tokens: int) -> str:
+def _anthropic_complete(system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool) -> str:
     settings = get_settings()
-    if "anthropic" not in _clients:
-        import anthropic
+    import anthropic
 
+    if "anthropic" not in _clients:
         _clients["anthropic"] = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     used_model = model or settings.anthropic_model
-    resp = _clients["anthropic"].messages.create(
-        model=used_model,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
+    # Anthropic has no JSON-mode flag; the system prompt already constrains the shape.
+    try:
+        resp = _clients["anthropic"].messages.create(
+            model=used_model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+    except anthropic.APIError as exc:
+        raise LLMUnavailable(f"Anthropic request failed for model '{used_model}': {exc}") from exc
     usage = getattr(resp, "usage", None)
     if usage is not None:
         set_last_usage(getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0, used_model)
     return "".join(block.text for block in resp.content if getattr(block, "type", None) == "text")
 
 
-def _openai_complete(system: str, user: str, model: Optional[str], max_tokens: int) -> str:
+def _openai_complete(system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool) -> str:
     settings = get_settings()
-    if "openai" not in _clients:
-        import openai
+    import openai
 
+    if "openai" not in _clients:
         _clients["openai"] = openai.OpenAI(api_key=settings.openai_api_key)
     used_model = model or settings.openai_model
-    resp = _clients["openai"].chat.completions.create(
+    kwargs = dict(
         model=used_model,
         max_tokens=max_tokens,
         messages=[
@@ -73,23 +77,57 @@ def _openai_complete(system: str, user: str, model: Optional[str], max_tokens: i
             {"role": "user", "content": user},
         ],
     )
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    try:
+        resp = _clients["openai"].chat.completions.create(**kwargs)
+    except openai.OpenAIError as exc:
+        raise LLMUnavailable(f"OpenAI request failed for model '{used_model}': {exc}") from exc
     usage = getattr(resp, "usage", None)
     if usage is not None:
         set_last_usage(getattr(usage, "prompt_tokens", 0) or 0, getattr(usage, "completion_tokens", 0) or 0, used_model)
     return resp.choices[0].message.content or ""
 
 
-def _gemini_complete(system: str, user: str, model: Optional[str], max_tokens: int) -> str:
+def _gemini_text(resp) -> str:
+    """Extract text from a Gemini response without the throwing ``.text`` accessor.
+
+    Gemini's ``response.text`` quick-accessor raises whenever the candidate's
+    ``finish_reason`` isn't ``STOP`` (e.g. ``MAX_TOKENS`` or ``SAFETY``), which
+    made long/edge generations surface as opaque failures. Join the text parts
+    ourselves and, when there are none, raise a message that names the reason.
+    """
+    for cand in getattr(resp, "candidates", None) or []:
+        content = getattr(cand, "content", None)
+        parts = getattr(content, "parts", None) or [] if content is not None else []
+        text = "".join(getattr(p, "text", "") or "" for p in parts)
+        if text:
+            return text
+    feedback = getattr(resp, "prompt_feedback", None)
+    block = getattr(feedback, "block_reason", None) if feedback is not None else None
+    if block:
+        raise ValueError(f"Gemini blocked the prompt (block_reason={block})")
+    candidates = getattr(resp, "candidates", None) or []
+    finish = getattr(candidates[0], "finish_reason", None) if candidates else None
+    raise ValueError(f"Gemini returned no text (finish_reason={finish})")
+
+
+def _gemini_complete(system: str, user: str, model: Optional[str], max_tokens: int, json_mode: bool) -> str:
     settings = get_settings()
     used_model = model or settings.gemini_model
     import google.generativeai as genai
+    from google.api_core import exceptions as google_exceptions
 
     genai.configure(api_key=settings.gemini_api_key)
+    gen_config = {"max_output_tokens": max_tokens}
+    if json_mode:
+        # Native JSON mode: no code fences or prose, so fewer wasted output tokens.
+        gen_config["response_mime_type"] = "application/json"
     gmodel = genai.GenerativeModel(model_name=used_model, system_instruction=system)
-    resp = gmodel.generate_content(
-        user,
-        generation_config={"max_output_tokens": max_tokens},
-    )
+    try:
+        resp = gmodel.generate_content(user, generation_config=gen_config)
+    except google_exceptions.GoogleAPIError as exc:
+        raise LLMUnavailable(f"Gemini request failed for model '{used_model}': {exc}") from exc
     usage = getattr(resp, "usage_metadata", None)
     if usage is not None:
         set_last_usage(
@@ -97,7 +135,7 @@ def _gemini_complete(system: str, user: str, model: Optional[str], max_tokens: i
             getattr(usage, "candidates_token_count", 0) or 0,
             used_model,
         )
-    return resp.text or ""
+    return _gemini_text(resp)
 
 
 _PROVIDERS = {
@@ -107,15 +145,21 @@ _PROVIDERS = {
 }
 
 
-def complete_text(system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024) -> str:
-    """Return the assistant's text response for a single-turn prompt."""
+def complete_text(
+    system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024, json_mode: bool = False
+) -> str:
+    """Return the assistant's text response for a single-turn prompt.
+
+    Set ``json_mode`` to have providers that support it emit raw JSON (no code
+    fences / prose), which cuts wasted output tokens and makes parsing reliable.
+    """
     settings = get_settings()
     provider = settings.active_provider
     if provider is None:
         raise LLMUnavailable(
             "No LLM provider configured — set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY"
         )
-    return _PROVIDERS[provider](system, user, model, max_tokens)
+    return _PROVIDERS[provider](system, user, model, max_tokens, json_mode)
 
 
 def _extract_json(text: str) -> str:
@@ -131,7 +175,7 @@ def _extract_json(text: str) -> str:
 
 def complete_json(system: str, user: str, model: Optional[str] = None, max_tokens: int = 1024) -> dict:
     """Ask the model for JSON and parse it. Raises ValueError on unparseable output."""
-    raw = complete_text(system=system, user=user, model=model, max_tokens=max_tokens)
+    raw = complete_text(system=system, user=user, model=model, max_tokens=max_tokens, json_mode=True)
     try:
         return json.loads(_extract_json(raw))
     except json.JSONDecodeError as exc:

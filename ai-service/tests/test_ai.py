@@ -1,8 +1,10 @@
 import os
 import sys
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 import main  # noqa: E402
 import llm  # noqa: E402
@@ -227,3 +229,198 @@ def test_chat_ok(monkeypatch):
     )
     assert res.status_code == 200
     assert "2 tasks" in res.json()["reply"]
+
+
+# --- Provider hardening (llm.py) ----------------------------------------------
+
+def _part(text):
+    return types.SimpleNamespace(text=text)
+
+
+def _candidate(parts, finish_reason=None):
+    return types.SimpleNamespace(content=types.SimpleNamespace(parts=parts), finish_reason=finish_reason)
+
+
+def _gemini_resp(candidates, usage=None, prompt_feedback=None):
+    return types.SimpleNamespace(
+        candidates=candidates, usage_metadata=usage, prompt_feedback=prompt_feedback
+    )
+
+
+def test_gemini_text_joins_parts():
+    resp = _gemini_resp([_candidate([_part("hello "), _part("world")], finish_reason="STOP")])
+    assert llm._gemini_text(resp) == "hello world"
+
+
+def test_gemini_text_returns_partial_on_max_tokens():
+    # Truncated output still has a part -> return it instead of raising.
+    resp = _gemini_resp([_candidate([_part('{"subtasks":[')], finish_reason="MAX_TOKENS")])
+    assert llm._gemini_text(resp) == '{"subtasks":['
+
+
+def test_gemini_text_raises_clear_error_when_empty_max_tokens():
+    # This is the intermittent "invalid" bug: no parts because the budget was
+    # exhausted (e.g. a thinking model). We surface finish_reason, not a crash.
+    resp = _gemini_resp([_candidate([], finish_reason="MAX_TOKENS")])
+    with pytest.raises(ValueError) as exc:
+        llm._gemini_text(resp)
+    assert "MAX_TOKENS" in str(exc.value)
+
+
+def test_gemini_text_raises_on_blocked_prompt():
+    resp = _gemini_resp([], prompt_feedback=types.SimpleNamespace(block_reason="SAFETY"))
+    with pytest.raises(ValueError) as exc:
+        llm._gemini_text(resp)
+    assert "SAFETY" in str(exc.value)
+
+
+# The provider SDKs aren't installed in the test venv (and tests must not need
+# network), so inject fake modules that expose just the surface llm.py touches.
+def _install_fake_gemini(monkeypatch, generative_model_cls):
+    google_pkg = types.ModuleType("google")
+    genai = types.ModuleType("google.generativeai")
+    genai.configure = lambda **k: None
+    genai.GenerativeModel = generative_model_cls
+    api_core = types.ModuleType("google.api_core")
+    exceptions = types.ModuleType("google.api_core.exceptions")
+
+    class GoogleAPIError(Exception):
+        pass
+
+    class NotFound(GoogleAPIError):
+        pass
+
+    exceptions.GoogleAPIError = GoogleAPIError
+    exceptions.NotFound = NotFound
+    google_pkg.generativeai = genai
+    google_pkg.api_core = api_core
+    api_core.exceptions = exceptions
+    for name, mod in {
+        "google": google_pkg,
+        "google.generativeai": genai,
+        "google.api_core": api_core,
+        "google.api_core.exceptions": exceptions,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    return exceptions
+
+
+def test_gemini_complete_uses_json_mode_and_records_usage(monkeypatch):
+    captured = {}
+
+    class FakeModel:
+        def __init__(self, model_name, system_instruction):
+            captured["model_name"] = model_name
+
+        def generate_content(self, user, generation_config=None):
+            captured["gen_config"] = generation_config
+            return _gemini_resp(
+                [_candidate([_part('{"ok": true}')], finish_reason="STOP")],
+                usage=types.SimpleNamespace(prompt_token_count=10, candidates_token_count=5),
+            )
+
+    _install_fake_gemini(monkeypatch, FakeModel)
+    monkeypatch.setattr(llm, "get_settings", lambda: _settings(gemini_api_key="g", gemini_model="gemini-2.5-flash"))
+
+    llm.reset_usage()
+    out = llm._gemini_complete("sys", "user", None, 256, True)
+    assert out == '{"ok": true}'
+    assert captured["model_name"] == "gemini-2.5-flash"
+    assert captured["gen_config"]["response_mime_type"] == "application/json"
+    assert captured["gen_config"]["max_output_tokens"] == 256
+    assert llm.get_last_usage()["input_tokens"] == 10
+
+
+def test_gemini_complete_invalid_model_raises_unavailable(monkeypatch):
+    # A bad GEMINI_MODEL (e.g. the non-existent "gemini-3.6-flash") -> graceful 503,
+    # not an opaque 500.
+    holder = {}
+
+    class BoomModel:
+        def __init__(self, **kwargs):
+            pass
+
+        def generate_content(self, *a, **k):
+            raise holder["NotFound"]("models/gemini-3.6-flash is not found")
+
+    exceptions = _install_fake_gemini(monkeypatch, BoomModel)
+    holder["NotFound"] = exceptions.NotFound
+    monkeypatch.setattr(llm, "get_settings", lambda: _settings(gemini_api_key="g", gemini_model="gemini-3.6-flash"))
+
+    with pytest.raises(llm.LLMUnavailable):
+        llm._gemini_complete("sys", "user", None, 256, True)
+
+
+def _fake_openai_client(create_fn):
+    completions = types.SimpleNamespace(create=create_fn)
+    return types.SimpleNamespace(chat=types.SimpleNamespace(completions=completions))
+
+
+def _install_fake_openai(monkeypatch):
+    openai_mod = types.ModuleType("openai")
+
+    class OpenAIError(Exception):
+        pass
+
+    openai_mod.OpenAIError = OpenAIError
+    monkeypatch.setitem(sys.modules, "openai", openai_mod)
+    return openai_mod
+
+
+def test_openai_complete_uses_json_mode(monkeypatch):
+    captured = {}
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return types.SimpleNamespace(
+            usage=types.SimpleNamespace(prompt_tokens=3, completion_tokens=2),
+            choices=[types.SimpleNamespace(message=types.SimpleNamespace(content='{"ok":1}'))],
+        )
+
+    _install_fake_openai(monkeypatch)
+    monkeypatch.setattr(llm, "get_settings", lambda: _settings(openai_api_key="o"))
+    monkeypatch.setitem(llm._clients, "openai", _fake_openai_client(create))
+    out = llm._openai_complete("sys", "user", None, 128, True)
+    assert out == '{"ok":1}'
+    assert captured["response_format"] == {"type": "json_object"}
+
+
+def test_openai_error_raises_unavailable(monkeypatch):
+    openai_mod = _install_fake_openai(monkeypatch)
+
+    def create(**kwargs):
+        raise openai_mod.OpenAIError("invalid api key")
+
+    monkeypatch.setattr(llm, "get_settings", lambda: _settings(openai_api_key="o"))
+    monkeypatch.setitem(llm._clients, "openai", _fake_openai_client(create))
+    with pytest.raises(llm.LLMUnavailable):
+        llm._openai_complete("sys", "user", None, 128, False)
+
+
+def test_anthropic_error_raises_unavailable(monkeypatch):
+    anthropic_mod = types.ModuleType("anthropic")
+
+    class APIError(Exception):
+        pass
+
+    anthropic_mod.APIError = APIError
+    monkeypatch.setitem(sys.modules, "anthropic", anthropic_mod)
+
+    def create(**kwargs):
+        raise APIError("overloaded")
+
+    client_obj = types.SimpleNamespace(messages=types.SimpleNamespace(create=create))
+    monkeypatch.setattr(llm, "get_settings", lambda: _settings(anthropic_api_key="a"))
+    monkeypatch.setitem(llm._clients, "anthropic", client_obj)
+    with pytest.raises(llm.LLMUnavailable):
+        llm._anthropic_complete("sys", "user", None, 128, False)
+
+
+def test_provider_unavailable_surfaces_503(monkeypatch):
+    # End-to-end: a provider failure mapped to LLMUnavailable degrades to 503.
+    def boom(**kwargs):
+        raise llm.LLMUnavailable("Gemini request failed for model 'gemini-3.6-flash'")
+
+    monkeypatch.setattr(task_planner, "complete_json", boom)
+    res = client.post("/breakdown", json={"title": "do a thing"}, headers=KEY)
+    assert res.status_code == 503
