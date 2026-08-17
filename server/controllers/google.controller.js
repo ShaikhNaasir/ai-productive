@@ -5,6 +5,7 @@ const config = require('../config/env');
 const ApiError = require('../utils/ApiError');
 const { signToken, verifyToken } = require('../utils/jwt');
 const googleCalendar = require('../services/googleCalendar');
+const googleSync = require('../services/googleSync');
 
 function ensureConfigured() {
   if (!googleCalendar.isConfigured()) {
@@ -75,4 +76,18 @@ async function disconnect(req, res) {
   res.status(204).send();
 }
 
-module.exports = { authUrl, callback, status, disconnect };
+// On-demand two-way sync for the current user. Google errors surface as a 503 so
+// the client can retry; core CRUD is unaffected.
+async function sync(req, res) {
+  ensureConfigured();
+  const account = await prisma.googleAccount.findUnique({ where: { userId: req.user.id } });
+  if (!account) throw ApiError.badRequest('Google Calendar is not connected');
+  try {
+    const result = await googleSync.syncUser(req.user.id);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    throw new ApiError(503, `Google sync failed: ${err.message}`);
+  }
+}
+
+module.exports = { authUrl, callback, status, disconnect, sync };

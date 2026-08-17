@@ -135,6 +135,9 @@ model Schedule {
   location    String?
   startTime   DateTime
   endTime     DateTime?
+  // Google Calendar sync (Roadmap C1.2): id of the linked Google event. Null for
+  // app-only schedules; set once the schedule is pushed to / imported from Google.
+  googleEventId String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -142,6 +145,7 @@ model Schedule {
 
   @@index([userId])
   @@index([startTime])
+  @@index([googleEventId])
   @@map("schedules")
 }
 
@@ -156,6 +160,7 @@ model GoogleAccount {
   expiryDate   DateTime?
   calendarId   String    @default("primary")
   syncToken    String?
+  lastSyncedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

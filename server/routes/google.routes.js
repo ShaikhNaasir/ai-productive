@@ -14,6 +14,7 @@ router.get('/callback', asyncHandler(ctrl.callback));
 // Everything else is user-scoped and requires a bearer token.
 router.get('/auth-url', requireAuth, asyncHandler(ctrl.authUrl));
 router.get('/status', requireAuth, asyncHandler(ctrl.status));
+router.post('/sync', requireAuth, asyncHandler(ctrl.sync));
 router.delete('/disconnect', requireAuth, asyncHandler(ctrl.disconnect));
 
 module.exports = router;

@@ -2,6 +2,7 @@
 
 const prisma = require('../models/prisma');
 const ApiError = require('../utils/ApiError');
+const googleSync = require('../services/googleSync');
 const {
   createScheduleSchema,
   updateScheduleSchema,
@@ -44,8 +45,10 @@ async function update(req, res) {
 }
 
 async function remove(req, res) {
-  await getOwned(req.user.id, req.params.id);
+  const schedule = await getOwned(req.user.id, req.params.id);
   await prisma.schedule.delete({ where: { id: req.params.id } });
+  // Propagate the delete to Google if this schedule was linked (best-effort).
+  await googleSync.deleteRemoteForSchedule(schedule);
   res.status(204).send();
 }
 

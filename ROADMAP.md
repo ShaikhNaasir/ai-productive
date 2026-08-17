@@ -104,8 +104,14 @@ Split into slices. Owner supplied OAuth 2.0 Client credentials (C1 unblocked).
   (session-less; verifies state, stores refresh token, redirects to client),
   `GET /status`, `DELETE /disconnect`. All user-scoped; degrades if Google is off.
   Migration deferred (`db push`).
-- [ ] **C1.2 — Two-way event sync.** `Schedule.googleEventId`; pull/push + incremental
-  `syncToken`; DB-backed background scheduler + on-demand `POST /api/google/sync`.
+- [x] **C1.2 — Two-way event sync.** `Schedule.googleEventId` + `GoogleAccount.lastSyncedAt`;
+  `services/googleCalendar.js` event ops (list/insert/update/delete, incremental
+  `syncToken`, 410 reset); `services/googleSync.js` `syncUser` (pull-then-push,
+  Google-wins conflict, cancel⇒delete) + `deleteRemoteForSchedule` (best-effort,
+  wired into `schedule.controller.remove`); DB-backed `googleSyncScheduler`
+  (`GOOGLE_SYNC_INTERVAL_MS`, default 5 min, started only when configured) +
+  on-demand `POST /api/google/sync`. Tests: `googleSync.test.js` (9) + sync
+  endpoints in `google.test.js` (2). Migration deferred (`db push`).
 - [ ] **C1.3 — Client UI.** Connect/disconnect/status + "Sync now" + synced badge.
 
 ### C2 — Shared / team tasks ✅

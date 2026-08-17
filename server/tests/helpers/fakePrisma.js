@@ -9,14 +9,14 @@ const nextId = () => String(counter++);
 const modelDefaults = {
   tasks: { priority: 'MEDIUM', status: 'PENDING', recurrence: 'NONE', tags: [], description: null, dueDate: null, completedAt: null, parentId: null },
   notes: { content: '', category: null, tags: [], pinned: false },
-  schedules: { description: null, location: null, endTime: null },
+  schedules: { description: null, location: null, endTime: null, googleEventId: null },
   reminders: { sent: false, recurrence: 'NONE', taskId: null },
   focusSessions: { taskId: null, endedAt: null, seconds: 0 },
   habits: { description: null },
   habitLogs: {},
   taskShares: { role: 'VIEW' },
   aiUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
-  googleAccounts: { accessToken: null, expiryDate: null, calendarId: 'primary', syncToken: null },
+  googleAccounts: { accessToken: null, expiryDate: null, calendarId: 'primary', syncToken: null, lastSyncedAt: null },
   users: { name: null },
 };
 

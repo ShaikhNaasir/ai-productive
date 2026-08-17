@@ -13,6 +13,12 @@ attachRealtime(server);
 const { startScheduler } = require('./services/reminderScheduler');
 startScheduler();
 
+// Background Google Calendar two-way sync — only when the integration is configured.
+const googleCalendar = require('./services/googleCalendar');
+if (googleCalendar.isConfigured()) {
+  require('./services/googleSyncScheduler').startScheduler();
+}
+
 server.listen(config.port, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${config.port} (${config.env})`);

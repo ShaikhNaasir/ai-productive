@@ -55,6 +55,8 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         sync: false          # e.g. https://productivity-api.onrender.com/api/google/callback
+      - key: GOOGLE_SYNC_INTERVAL_MS
+        value: "300000"      # background two-way sync cadence (5 min)
       - fromGroup: shared-secrets
 
   # ---- FastAPI AI service ----
