@@ -10,6 +10,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Focus timer robustness.** The Pomodoro timer now supports **pause/resume**
+  and **custom durations** (1–180 min) alongside the 25/15/5 presets, and
+  **recovers a running session** after a reload or navigating away: sessions
+  store their planned duration (`FocusSession.plannedSeconds`) and a new
+  `GET /api/focus/active` returns the open session. Stop accepts the client's
+  active seconds (pauses excluded); the server clamps it to the wall-clock
+  elapsed and to the planned duration, so an orphaned open session can never
+  inflate tracked time.
 - **Google Calendar sync (Roadmap C1).** Two-way sync between local schedules and
   a user's Google Calendar, added in three slices:
   - *C1.1 — Connect + token storage.* OAuth 2.0 (Authorization Code) flow:
@@ -31,6 +39,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Focus timer "Validation failed" on start.** `POST /api/focus/start` rejected
+  any `startedAt` in the future, so a device whose clock ran even slightly fast
+  could never start a session. The server now clamps a future `startedAt` to now
+  instead of rejecting it, and the client surfaces the specific field-level
+  validation message rather than a generic "Validation failed".
 - **Gemini failures now degrade gracefully instead of surfacing as "invalid".**
   `_gemini_complete` no longer uses Gemini's throwing `response.text` accessor,
   which raised whenever a candidate's `finish_reason` wasn't `STOP` (e.g.

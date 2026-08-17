@@ -11,7 +11,7 @@ const modelDefaults = {
   notes: { content: '', category: null, tags: [], pinned: false },
   schedules: { description: null, location: null, endTime: null, googleEventId: null },
   reminders: { sent: false, recurrence: 'NONE', taskId: null },
-  focusSessions: { taskId: null, endedAt: null, seconds: 0 },
+  focusSessions: { taskId: null, endedAt: null, seconds: 0, plannedSeconds: null },
   habits: { description: null },
   habitLogs: {},
   taskShares: { role: 'VIEW' },
@@ -119,8 +119,9 @@ function makeModel(name) {
       const [field, val] = Object.entries(where)[0];
       return rows.find((r) => r[field] === val) || null;
     },
-    findFirst: async ({ where, include } = {}) => {
-      const found = rows.find((r) => matchWhere(r, where)) || null;
+    findFirst: async ({ where, orderBy, include } = {}) => {
+      const filtered = rows.filter((r) => matchWhere(r, where));
+      const found = applyOrderBy(filtered, orderBy)[0] || null;
       if (!found) return null;
       return include ? applyInclude([found], include, rows)[0] : found;
     },

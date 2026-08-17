@@ -45,5 +45,11 @@ export function apiError(error, fallback = 'Something went wrong') {
   if (error?.response?.status === 503) {
     return 'The service is waking up — please try again in a few seconds.';
   }
-  return error?.response?.data?.error?.message || error?.message || fallback;
+  const data = error?.response?.data?.error;
+  // Surface the first field-level validation message instead of a generic
+  // "Validation failed", so the user sees exactly what went wrong.
+  if (data?.details?.length) {
+    return data.details[0].message || data.message || fallback;
+  }
+  return data?.message || error?.message || fallback;
 }

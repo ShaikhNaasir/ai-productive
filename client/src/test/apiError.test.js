@@ -10,6 +10,16 @@ describe('apiError', () => {
     expect(apiError({ response: { status: 400, data: { error: { message: 'Bad input' } } } })).toBe('Bad input');
   });
 
+  it('surfaces the first field-level validation detail', () => {
+    const err = {
+      response: {
+        status: 400,
+        data: { error: { message: 'Validation failed', details: [{ path: 'startedAt', message: 'startedAt cannot be in the future' }] } },
+      },
+    };
+    expect(apiError(err)).toBe('startedAt cannot be in the future');
+  });
+
   it('falls back when there is no message', () => {
     expect(apiError({}, 'Custom fallback')).toBe('Custom fallback');
   });

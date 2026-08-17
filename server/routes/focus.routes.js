@@ -11,6 +11,7 @@ router.use(requireAuth);
 
 router.post('/start', asyncHandler(ctrl.start));
 router.post('/:id/stop', asyncHandler(ctrl.stop));
+router.get('/active', asyncHandler(ctrl.active));
 router.get('/stats', asyncHandler(ctrl.stats));
 
 module.exports = router;

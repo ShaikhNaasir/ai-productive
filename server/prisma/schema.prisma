@@ -179,6 +179,9 @@ model FocusSession {
   startedAt DateTime  @default(now())
   endedAt   DateTime?
   seconds   Int       @default(0)
+  // Planned duration (Roadmap A3 / focus robustness). Lets a reload recover a
+  // running timer and caps recorded time so an orphaned open session can't inflate.
+  plannedSeconds Int?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
