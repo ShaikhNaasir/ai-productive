@@ -6,7 +6,7 @@ main app can fall back gracefully.
 """
 from fastapi import FastAPI, Depends, Header, HTTPException, Response
 
-from config import get_settings
+from config import get_settings, assert_secure_config
 from schemas import (
     SummarizeRequest,
     SummarizeResponse,
@@ -32,6 +32,9 @@ import assistant
 import embeddings as embeddings_mod
 
 app = FastAPI(title="Productivity Assistant AI Service", version="0.1.0")
+
+# Refuse to boot on Render with the public default internal key.
+assert_secure_config(get_settings())
 
 
 def require_internal_key(x_internal_key: str = Header(default="")):

@@ -3,11 +3,13 @@
 const express = require('express');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireAuth } = require('../middleware/auth');
+const { aiLimiter } = require('../middleware/rateLimit');
 const ctrl = require('../controllers/ai.controller');
 
 const router = express.Router();
 
 router.use(requireAuth);
+router.use(aiLimiter);
 
 router.post('/parse-task', asyncHandler(ctrl.parseTask));
 router.post('/tasks', asyncHandler(ctrl.createTaskFromText));

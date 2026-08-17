@@ -45,4 +45,14 @@ const config = {
   databaseUrl: process.env.DATABASE_URL,
 };
 
+// In production the shared internal key must be a real, non-default secret —
+// otherwise anyone who reaches the public AI service URL could call it. Fail fast
+// rather than silently falling back to the public 'dev-internal-key'.
+if (config.env === 'production') {
+  const key = process.env.INTERNAL_API_KEY;
+  if (!key || key === 'dev-internal-key') {
+    throw new Error('INTERNAL_API_KEY must be set to a strong, non-default value in production');
+  }
+}
+
 module.exports = config;

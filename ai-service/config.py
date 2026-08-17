@@ -1,4 +1,5 @@
 """Configuration for the AI service, loaded from environment / .env."""
+import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -68,3 +69,17 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def assert_secure_config(settings: Settings, on_render: "bool | None" = None) -> None:
+    """Fail fast if deployed (on Render) while still using the built-in default
+    internal key. That key is public (checked into the repo), and the AI service
+    is reachable at a public URL, so the default must never be used in production.
+    """
+    if on_render is None:
+        on_render = bool(os.getenv("RENDER"))
+    if on_render and settings.internal_api_key == "dev-internal-key":
+        raise RuntimeError(
+            "INTERNAL_API_KEY must be set to a strong, non-default value in "
+            "production; the built-in 'dev-internal-key' is public."
+        )

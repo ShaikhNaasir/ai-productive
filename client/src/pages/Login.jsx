@@ -13,7 +13,9 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
+  // Only redirect to an internal absolute path — never an off-site URL (open-redirect guard).
+  const rawFrom = location.state?.from?.pathname || '/';
+  const from = rawFrom.startsWith('/') && !rawFrom.startsWith('//') ? rawFrom : '/';
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
