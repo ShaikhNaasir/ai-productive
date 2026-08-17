@@ -17,7 +17,7 @@ const modelDefaults = {
   taskShares: { role: 'VIEW' },
   aiUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
   googleAccounts: { accessToken: null, expiryDate: null, calendarId: 'primary', syncToken: null, lastSyncedAt: null },
-  users: { name: null },
+  users: { name: null, tokenVersion: 0 },
 };
 
 function matchCondition(value, cond) {

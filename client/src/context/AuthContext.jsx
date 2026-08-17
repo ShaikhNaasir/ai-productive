@@ -44,7 +44,13 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Best-effort server-side revocation (bumps tokenVersion), then clear locally.
+    try {
+      await authService.logout();
+    } catch {
+      // ignore — always clear the local session
+    }
     setToken(null);
     setUser(null);
   }, []);

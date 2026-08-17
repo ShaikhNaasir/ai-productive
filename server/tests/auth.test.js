@@ -85,6 +85,35 @@ describe('auth', () => {
     expect(res.status).toBe(401);
   });
 
+  test('logout invalidates the existing token (server-side revocation)', async () => {
+    const reg = await registerUser({ email: 'lo@b.com' });
+    const token = reg.body.token;
+
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)).status).toBe(200);
+
+    await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
+
+    const after = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
+    expect(after.status).toBe(401);
+  });
+
+  test('change password rotates the token: old one dies, new one works', async () => {
+    const reg = await registerUser({ email: 'rotate@b.com', password: 'password123' });
+    const oldToken = reg.body.token;
+
+    const changed = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${oldToken}`)
+      .send({ currentPassword: 'password123', newPassword: 'newpassword123' });
+    expect(changed.status).toBe(200);
+    const newToken = changed.body.token;
+    expect(newToken).toBeTruthy();
+
+    // Old token is now invalid, new token works.
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${oldToken}`)).status).toBe(401);
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${newToken}`)).status).toBe(200);
+  });
+
   test('me returns current user with valid token', async () => {
     const reg = await registerUser({ email: 'me@b.com' });
     const res = await request(app)

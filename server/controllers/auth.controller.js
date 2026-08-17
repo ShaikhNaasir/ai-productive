@@ -2,7 +2,7 @@
 
 const bcrypt = require('bcryptjs');
 const prisma = require('../models/prisma');
-const { signToken } = require('../utils/jwt');
+const { signToken, verifyToken } = require('../utils/jwt');
 const ApiError = require('../utils/ApiError');
 const {
   registerSchema,
@@ -18,7 +18,7 @@ function serializeUser(user) {
 }
 
 function issueToken(user) {
-  return signToken({ sub: user.id, email: user.email });
+  return signToken({ sub: user.id, email: user.email, ver: user.tokenVersion ?? 0 });
 }
 
 async function register(req, res) {
@@ -53,8 +53,26 @@ async function login(req, res) {
   res.json({ user: serializeUser(user), token: issueToken(user) });
 }
 
-// JWT is stateless; logout is a client-side token discard. Endpoint provided for symmetry.
+// Best-effort server-side revocation: if a valid token is presented, bump the
+// user's tokenVersion so that token (and any others) can no longer authenticate.
+// Always returns success so the client can clear its token regardless.
 async function logout(req, res) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token) {
+    try {
+      const payload = verifyToken(token);
+      const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+      if (user) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { tokenVersion: (user.tokenVersion ?? 0) + 1 },
+        });
+      }
+    } catch {
+      // Invalid/expired token — nothing to revoke.
+    }
+  }
   res.json({ success: true });
 }
 
@@ -97,9 +115,15 @@ async function changePassword(req, res) {
   }
 
   const passwordHash = await bcrypt.hash(data.newPassword, SALT_ROUNDS);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  // Invalidate every previously issued token, then hand this session a fresh one
+  // so the user who just changed their password isn't logged out.
+  const tokenVersion = (user.tokenVersion ?? 0) + 1;
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, tokenVersion },
+  });
 
-  res.json({ success: true });
+  res.json({ success: true, token: issueToken(updated) });
 }
 
 module.exports = { register, login, logout, me, updateProfile, changePassword };
