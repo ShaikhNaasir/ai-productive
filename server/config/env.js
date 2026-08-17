@@ -32,6 +32,13 @@ const config = {
     url: ensureScheme(process.env.AI_SERVICE_URL) || 'http://localhost:8000',
     internalKey: process.env.INTERNAL_API_KEY || 'dev-internal-key',
   },
+  // Google Calendar sync (Roadmap C1). Optional — absent credentials leave the
+  // integration disabled and its endpoints degrade to 503 (never crash core CRUD).
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/google/callback',
+  },
   // Semantic search needs the AI service + Voyage key + pgvector. Off by default so
   // core CRUD never blocks on embeddings; enable in production once configured.
   embeddingsEnabled: process.env.EMBEDDINGS_ENABLED === 'true',

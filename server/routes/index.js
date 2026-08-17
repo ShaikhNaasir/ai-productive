@@ -15,6 +15,7 @@ router.use('/notes', require('./note.routes'));
 router.use('/schedules', require('./schedule.routes'));
 router.use('/reminders', require('./reminder.routes'));
 router.use('/calendar', require('./calendar.routes'));
+router.use('/google', require('./google.routes'));
 router.use('/ai', require('./ai.routes'));
 router.use('/analytics', require('./analytics.routes'));
 router.use('/focus', require('./focus.routes'));

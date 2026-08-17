@@ -54,6 +54,7 @@ model User {
   habitLogs     HabitLog[]
   taskShares    TaskShare[]
   aiUsage       AiUsage[]
+  googleAccount GoogleAccount?
 
   @@map("users")
 }
@@ -142,6 +143,25 @@ model Schedule {
   @@index([userId])
   @@index([startTime])
   @@map("schedules")
+}
+
+// Google Calendar OAuth connection (Roadmap C1). One per user. Stores the refresh
+// token (long-lived) so the server can mint access tokens for background two-way
+// sync. `syncToken` is reserved for incremental sync in a later slice.
+model GoogleAccount {
+  id           String    @id @default(uuid())
+  userId       String    @unique
+  refreshToken String
+  accessToken  String?
+  expiryDate   DateTime?
+  calendarId   String    @default("primary")
+  syncToken    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_accounts")
 }
 
 // Pomodoro / time-tracking session (Roadmap A3). A session is opened on start

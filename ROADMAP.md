@@ -95,7 +95,18 @@ change history `CHANGELOG.md`, agent rules `CLAUDE.md`.
 ## Tier C — needs external accounts / larger scope
 
 ### C1 — Google Calendar sync
-- [ ] OAuth (Google), two-way sync of schedules. **Blocked:** Google API credentials.
+Split into slices. Owner supplied OAuth 2.0 Client credentials (C1 unblocked).
+- [~] **C1.1 — OAuth connect + token storage (backend).** `googleapis` dep; `GoogleAccount`
+  model (per-user refresh token, `calendarId`, reserved `syncToken`); `config.google`
+  (client id/secret/redirect URI — absent ⇒ integration disabled, endpoints 503);
+  `services/googleCalendar.js` (OAuth2 client, auth URL, code exchange); routes
+  `/api/google` — `GET /auth-url` (state = signed JWT of userId), `GET /callback`
+  (session-less; verifies state, stores refresh token, redirects to client),
+  `GET /status`, `DELETE /disconnect`. All user-scoped; degrades if Google is off.
+  Migration deferred (`db push`).
+- [ ] **C1.2 — Two-way event sync.** `Schedule.googleEventId`; pull/push + incremental
+  `syncToken`; DB-backed background scheduler + on-demand `POST /api/google/sync`.
+- [ ] **C1.3 — Client UI.** Connect/disconnect/status + "Sync now" + synced badge.
 
 ### C2 — Shared / team tasks ✅
 Split into two slices.

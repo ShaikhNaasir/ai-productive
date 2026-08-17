@@ -46,6 +46,15 @@ services:
           envVarKey: RENDER_EXTERNAL_URL
       - key: EMBEDDINGS_ENABLED
         sync: false          # set to "true" in the dashboard once VOYAGE_API_KEY is added
+      # Google Calendar sync (Roadmap C1). Optional — leave unset to disable.
+      # Create an OAuth 2.0 Client (Web app) in Google Cloud Console, enable the
+      # Calendar API, and add "<api-url>/api/google/callback" as an authorized redirect URI.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false          # e.g. https://productivity-api.onrender.com/api/google/callback
       - fromGroup: shared-secrets
 
   # ---- FastAPI AI service ----

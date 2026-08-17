@@ -16,6 +16,7 @@ const modelDefaults = {
   habitLogs: {},
   taskShares: { role: 'VIEW' },
   aiUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+  googleAccounts: { accessToken: null, expiryDate: null, calendarId: 'primary', syncToken: null },
   users: { name: null },
 };
 
@@ -185,6 +186,7 @@ function createFakePrisma() {
     habitLog: makeModel('habitLogs'),
     taskShare: makeModel('taskShares'),
     aiUsage: makeModel('aiUsage'),
+    googleAccount: makeModel('googleAccounts'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},
