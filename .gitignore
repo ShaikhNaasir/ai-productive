@@ -46,3 +46,4 @@ Thumbs.db
 # Coverage
 coverage/
 .pytest_cache/
+.gstack/
