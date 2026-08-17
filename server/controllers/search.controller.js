@@ -12,18 +12,24 @@ async function vectorSearch(userId, q, limit) {
   const vec = await embeddingService.embedQuery(q);
   const literal = embeddingService.toVectorLiteral(vec);
 
+  // All dynamic values are bound as parameters ($1 user, $2 vector, $3 limit) —
+  // nothing is string-interpolated into the SQL.
   const [notes, tasks] = await Promise.all([
     prisma.$queryRawUnsafe(
-      `SELECT id, title, 'note' AS type, (embedding <=> '${literal}'::vector) AS distance
+      `SELECT id, title, 'note' AS type, (embedding <=> $2::vector) AS distance
        FROM "notes" WHERE "userId" = $1 AND embedding IS NOT NULL
-       ORDER BY distance ASC LIMIT ${limit}`,
-      userId
+       ORDER BY distance ASC LIMIT $3`,
+      userId,
+      literal,
+      limit
     ),
     prisma.$queryRawUnsafe(
-      `SELECT id, title, 'task' AS type, (embedding <=> '${literal}'::vector) AS distance
+      `SELECT id, title, 'task' AS type, (embedding <=> $2::vector) AS distance
        FROM "tasks" WHERE "userId" = $1 AND embedding IS NOT NULL
-       ORDER BY distance ASC LIMIT ${limit}`,
-      userId
+       ORDER BY distance ASC LIMIT $3`,
+      userId,
+      literal,
+      limit
     ),
   ]);
 

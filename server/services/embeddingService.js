@@ -16,17 +16,23 @@ function toVectorLiteral(vec) {
   return `[${vec.map((x) => Number(x)).join(',')}]`;
 }
 
+// Table names can't be bound as SQL parameters, so restrict them to a fixed
+// allowlist (callers only ever pass these two constants).
+const ALLOWED_TABLES = new Set(['tasks', 'notes']);
+
 // Compute and persist an embedding for a single record. Failures are swallowed so
 // they never break the originating CRUD request.
 async function indexRecord(table, id, text) {
   if (!config.embeddingsEnabled || !text) return;
+  if (!ALLOWED_TABLES.has(table)) return;
   try {
     const { embeddings } = await aiClient.embed([text]);
     const literal = toVectorLiteral(embeddings[0]);
-    // Parameterize the id; the vector literal contains only numbers we generated.
+    // id and the vector literal are both bound as parameters ($1, $2).
     await prisma.$executeRawUnsafe(
-      `UPDATE "${table}" SET embedding = '${literal}'::vector WHERE id = $1`,
-      id
+      `UPDATE "${table}" SET embedding = $2::vector WHERE id = $1`,
+      id,
+      literal
     );
   } catch (err) {
     // eslint-disable-next-line no-console

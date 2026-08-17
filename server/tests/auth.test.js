@@ -52,6 +52,11 @@ describe('auth', () => {
     expect(res.status).toBe(400);
   });
 
+  test('register rejects a password under 10 characters', async () => {
+    const res = await registerUser({ email: 'nine@b.com', password: 'nineChars' }); // 9 chars
+    expect(res.status).toBe(400);
+  });
+
   test('register rejects duplicate email', async () => {
     await registerUser({ email: 'dup@b.com' });
     const res = await registerUser({ email: 'dup@b.com' });

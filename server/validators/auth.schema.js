@@ -4,7 +4,7 @@ const { z } = require('zod');
 
 const registerSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(10, 'Password must be at least 10 characters').max(128),
   name: z.string().trim().min(1).max(100).optional(),
 });
 
@@ -24,7 +24,7 @@ const updateProfileSchema = z
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  newPassword: z.string().min(10, 'Password must be at least 10 characters').max(128),
 });
 
 module.exports = {

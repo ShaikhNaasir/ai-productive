@@ -4,6 +4,8 @@ All feature endpoints require the internal shared key (X-Internal-Key) so only t
 Express server can call them. LLM/embedding failures degrade to HTTP 503 so the
 main app can fall back gracefully.
 """
+import hmac
+
 from fastapi import FastAPI, Depends, Header, HTTPException, Response
 
 from config import get_settings, assert_secure_config
@@ -39,7 +41,8 @@ assert_secure_config(get_settings())
 
 def require_internal_key(x_internal_key: str = Header(default="")):
     settings = get_settings()
-    if x_internal_key != settings.internal_api_key:
+    # Constant-time compare so the check can't be probed via timing.
+    if not hmac.compare_digest(x_internal_key, settings.internal_api_key):
         raise HTTPException(status_code=401, detail="Invalid internal key")
 
 
