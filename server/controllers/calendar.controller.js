@@ -27,7 +27,7 @@ async function calendar(req, res) {
 
   const events = [
     ...tasks.map((t) => ({ type: 'task', id: t.id, title: t.title, date: t.dueDate, meta: { priority: t.priority, status: t.status } })),
-    ...schedules.map((s) => ({ type: 'schedule', id: s.id, title: s.title, date: s.startTime, meta: { endTime: s.endTime, location: s.location } })),
+    ...schedules.map((s) => ({ type: 'schedule', id: s.id, title: s.title, date: s.startTime, meta: { endTime: s.endTime, location: s.location, googleEventId: s.googleEventId } })),
     ...reminders.map((r) => ({ type: 'reminder', id: r.id, title: r.message, date: r.remindAt, meta: { sent: r.sent } })),
   ].sort((a, b) => new Date(a.date) - new Date(b.date));
 

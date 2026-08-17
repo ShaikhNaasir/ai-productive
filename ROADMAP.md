@@ -15,9 +15,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 (Anthropic / OpenAI / Gemini — bring any one key). Every suite green:
 server (Jest), ai-service (pytest), client (Vitest) + build; lint clean.
 
-**Only remaining backlog item: `C1 — Google Calendar sync` — BLOCKED** on the
-owner providing Google OAuth credentials (client ID/secret + consent screen).
-Nothing else is pending.
+**`C1 — Google Calendar sync` is now complete** (C1.1 OAuth connect + token
+storage, C1.2 two-way event sync, C1.3 client UI). It needs an OAuth 2.0 Client
+(ID/secret) + `GOOGLE_REDIRECT_URI` set on the API service to activate; unset,
+the integration stays disabled and core CRUD is unaffected. **Nothing else is
+pending in the backlog.**
 
 **Deploy / ops notes:**
 - Render applies schema via `prisma db push` (`render.yaml`), so all deferred
@@ -112,7 +114,11 @@ Split into slices. Owner supplied OAuth 2.0 Client credentials (C1 unblocked).
   (`GOOGLE_SYNC_INTERVAL_MS`, default 5 min, started only when configured) +
   on-demand `POST /api/google/sync`. Tests: `googleSync.test.js` (9) + sync
   endpoints in `google.test.js` (2). Migration deferred (`db push`).
-- [ ] **C1.3 — Client UI.** Connect/disconnect/status + "Sync now" + synced badge.
+- [x] **C1.3 — Client UI.** `googleService` (status/auth-url/sync/disconnect); Settings
+  "Google Calendar" card (Connect → OAuth redirect, connected state, Sync now,
+  Disconnect; reads `?google=connected`); "Synced" badge on Google-linked schedule
+  events in the Calendar (server `/calendar` now returns `googleEventId` in meta).
+  Tests: `googleCalendar.test.jsx` (4). Client 24 green, lint clean, build OK.
 
 ### C2 — Shared / team tasks ✅
 Split into two slices.

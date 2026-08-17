@@ -38,6 +38,7 @@ backlog.
 | Voice command capture (B4) | Speak a task in the "AI Add" box (Web Speech API); graceful fallback where unsupported | client `VoiceInput` → `POST /api/ai/tasks` |
 | Shared / team tasks (C2) | Share a task by email (VIEW/EDIT); "Shared" tab with role-based access; delete stays owner-only | `POST /api/tasks/:id/share`, `GET /api/tasks/shared` |
 | AI usage & cost monitoring (C3) | Per-call token usage attributed per user, estimated USD cost, Analytics card | `GET /api/ai/usage` |
+| Google Calendar sync (C1) | Connect via OAuth 2.0; two-way schedule ⇄ Google event sync (incremental, Google-wins conflicts) on an interval + on demand; connect/disconnect/Sync-now in Settings, "Synced" badge in Calendar | `GET /api/google/auth-url`, `GET /api/google/callback`, `GET /api/google/status`, `POST /api/google/sync`, `DELETE /api/google/disconnect` |
 
 ## 🛠 Technologies Used
 

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { authService } from '@/services/authService';
+import { googleService } from '@/services/googleService';
 import { apiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,102 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 function Status({ msg }) {
   if (!msg) return null;
   return <p className={`text-sm ${msg.ok ? 'text-foreground' : 'text-destructive'}`}>{msg.text}</p>;
+}
+
+function GoogleCalendarCard() {
+  const [status, setStatus] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadStatus = async () => {
+    try {
+      setStatus(await googleService.status());
+    } catch (err) {
+      setMsg({ ok: false, text: apiError(err, 'Failed to load Google status') });
+    }
+  };
+
+  useEffect(() => {
+    loadStatus();
+    // The OAuth callback redirects back here with ?google=connected.
+    if (new URLSearchParams(window.location.search).get('google') === 'connected') {
+      setMsg({ ok: true, text: 'Google Calendar connected.' });
+    }
+  }, []);
+
+  const connect = async () => {
+    setMsg(null);
+    try {
+      window.location.assign(await googleService.authUrl());
+    } catch (err) {
+      setMsg({ ok: false, text: apiError(err, 'Could not start Google sign-in') });
+    }
+  };
+
+  const syncNow = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await googleService.sync();
+      setMsg({ ok: true, text: `Synced. Pulled ${r.pulled ?? 0}, pushed ${r.pushed ?? 0}.` });
+    } catch (err) {
+      setMsg({ ok: false, text: apiError(err, 'Sync failed') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setMsg(null);
+    try {
+      await googleService.disconnect();
+      await loadStatus();
+      setMsg({ ok: true, text: 'Disconnected.' });
+    } catch (err) {
+      setMsg({ ok: false, text: apiError(err, 'Disconnect failed') });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Google Calendar</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {status && !status.configured && (
+          <p className="text-sm text-muted-foreground">
+            Google Calendar integration is not configured on the server.
+          </p>
+        )}
+        {status && status.configured && !status.connected && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Connect your Google Calendar to sync events both ways.
+            </p>
+            <Button type="button" onClick={connect}>
+              Connect Google Calendar
+            </Button>
+          </>
+        )}
+        {status && status.connected && (
+          <>
+            <p className="text-sm">
+              Connected · calendar <span className="font-medium">{status.calendarId}</span>
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" onClick={syncNow} disabled={busy}>
+                {busy ? 'Syncing…' : 'Sync now'}
+              </Button>
+              <Button type="button" variant="secondary" onClick={disconnect}>
+                Disconnect
+              </Button>
+            </div>
+          </>
+        )}
+        <Status msg={msg} />
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function Settings() {
@@ -86,6 +183,8 @@ export default function Settings() {
           </form>
         </CardContent>
       </Card>
+
+      <GoogleCalendarCard />
     </div>
   );
 }

@@ -142,6 +142,9 @@ export default function Calendar() {
                     <div className="flex items-center gap-2">
                       <Badge variant={typeVariant[e.type]}>{e.type}</Badge>
                       <span className="text-sm">{e.title}</span>
+                      {e.type === 'schedule' && e.meta?.googleEventId && (
+                        <Badge variant="outline">Synced</Badge>
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground">{formatDate(e.date, { withTime: true })}</span>
                   </div>

@@ -8,6 +8,27 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Google Calendar sync (Roadmap C1).** Two-way sync between local schedules and
+  a user's Google Calendar, added in three slices:
+  - *C1.1 — Connect + token storage.* OAuth 2.0 (Authorization Code) flow:
+    `GET /api/google/auth-url` (state = signed JWT of the user), a session-less
+    `GET /api/google/callback` that stores the refresh token on a per-user
+    `GoogleAccount`, plus `GET /api/google/status` and `DELETE /api/google/disconnect`.
+    Absent credentials disable the integration (endpoints return 503); tokens are
+    never exposed to the browser.
+  - *C1.2 — Two-way event sync.* `services/googleSync.js` pulls changed Google
+    events into `Schedule` rows and pushes local schedules back, keyed by
+    `Schedule.googleEventId`. Incremental via `syncToken` (resets on 410); a remote
+    edit wins a conflict (Google-wins); a cancelled event deletes the local
+    schedule and a local delete best-effort removes the remote event. Runs on a
+    DB-backed interval scheduler (`GOOGLE_SYNC_INTERVAL_MS`, default 5 min, started
+    only when configured) and on demand via `POST /api/google/sync`.
+  - *C1.3 — Client UI.* A "Google Calendar" card in Settings (connect, status,
+    Sync now, disconnect) and a "Synced" badge on Google-linked events in the
+    Calendar view.
+
 ### Fixed
 
 - **Gemini failures now degrade gracefully instead of surfacing as "invalid".**
