@@ -39,6 +39,9 @@ services:
           type: web
           name: productivity-ai
           envVarKey: RENDER_EXTERNAL_URL
+      # Wait through a free-tier cold start of the AI service, and retry once.
+      - key: AI_TIMEOUT_MS
+        value: "60000"
       - key: CLIENT_ORIGIN
         fromService:
           type: web

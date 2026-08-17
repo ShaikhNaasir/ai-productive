@@ -7,9 +7,24 @@ const prisma = require('../models/prisma');
 const { getUserId } = require('../middleware/requestContext');
 const { costUsd } = require('../utils/aiCost');
 
+// Render's free tier spins services down when idle; a cold start can take longer
+// than a snappy timeout, so we wait up to 60s and retry once. Both are env-tunable.
+const TIMEOUT_MS = parseInt(process.env.AI_TIMEOUT_MS || '60000', 10);
+const RETRY_DELAY_MS = parseInt(process.env.AI_RETRY_DELAY_MS || '1500', 10);
+const MAX_RETRIES = 1;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// A cold-starting or briefly overloaded service answers on a second try: retry on a
+// transport failure (no response) or a 502/503. A 4xx (bad key/input) is not retried.
+function isRetryable(err) {
+  if (!err.response) return true;
+  return err.response.status === 502 || err.response.status === 503;
+}
+
 const client = axios.create({
   baseURL: config.aiService.url,
-  timeout: 30000,
+  timeout: TIMEOUT_MS,
   headers: { 'X-Internal-Key': config.aiService.internalKey },
 });
 
@@ -41,21 +56,32 @@ function recordUsage(path, headers) {
 }
 
 // Translates transport/AI errors into a clean 503 so the app degrades gracefully.
+// Retries once on a retryable failure (cold start / transient) before giving up.
 async function call(path, body) {
-  try {
-    const res = await client.post(path, body);
-    recordUsage(path, res.headers);
-    return res.data;
-  } catch (err) {
-    if (err.response) {
-      const status = err.response.status;
-      const message = err.response.data?.detail || 'AI service error';
-      // 502/503 from the AI service (LLM unavailable / bad output) bubble up as 503.
-      throw new ApiError(status === 401 ? 500 : 503, `AI unavailable: ${message}`);
+  let lastErr;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await client.post(path, body);
+      recordUsage(path, res.headers);
+      return res.data;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < MAX_RETRIES && isRetryable(err)) {
+        await sleep(RETRY_DELAY_MS);
+        continue;
+      }
+      break;
     }
-    // Connection refused / timeout — service down.
-    throw new ApiError(503, 'AI service is unavailable. Please try again later.');
   }
+
+  if (lastErr.response) {
+    const status = lastErr.response.status;
+    const message = lastErr.response.data?.detail || 'AI service error';
+    // 502/503 from the AI service (LLM unavailable / bad output) bubble up as 503.
+    throw new ApiError(status === 401 ? 500 : 503, `AI unavailable: ${message}`);
+  }
+  // Connection refused / timeout — service down.
+  throw new ApiError(503, 'AI service is unavailable. Please try again later.');
 }
 
 const aiClient = {

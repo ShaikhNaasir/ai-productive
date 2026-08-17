@@ -453,3 +453,8 @@ cd client && cp .env.example .env && npm install && npm run dev
 | `EMBEDDINGS_ENABLED=true` | server | Turn on embedding indexing + semantic search |
 
 The app degrades gracefully: if the AI service or its keys are absent, core task/note/calendar/reminder features keep working and search falls back to keyword matching.
+
+**Render free-tier cold starts.** Free web services spin down after ~15 min idle and take ~30–60 s to wake on the next request, which can surface transiently as an "AI unavailable" 503. Mitigations, in order:
+- Keep them warm with a free uptime pinger (e.g. UptimeRobot) hitting `<'/api/health'>` on the API and `<'/health'>` on the AI service every ~10 min.
+- The server already waits up to `AI_TIMEOUT_MS` (default 60 s) for the AI service and retries once on a cold-start/transient failure; the client shows a "service is waking up — try again" hint on a 503.
+- For no spin-down at all, use a paid instance.

@@ -40,5 +40,10 @@ api.interceptors.response.use(
 );
 
 export function apiError(error, fallback = 'Something went wrong') {
+  // A 503 usually means a Render free-tier service is cold-starting; the request
+  // typically succeeds a few seconds later, so show a friendly retry hint.
+  if (error?.response?.status === 503) {
+    return 'The service is waking up — please try again in a few seconds.';
+  }
   return error?.response?.data?.error?.message || error?.message || fallback;
 }
