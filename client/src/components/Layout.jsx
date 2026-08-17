@@ -19,6 +19,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationContext';
 import InstallPrompt from '@/components/InstallPrompt';
+import BrandFooter from '@/components/BrandFooter';
 import { Button } from '@/components/ui/button';
 import { cn, formatDate } from '@/lib/utils';
 
@@ -140,6 +141,10 @@ export default function Layout() {
         <main className="dashboard flex-1 p-4 md:p-6">
           <Outlet />
         </main>
+
+        <footer className="border-t bg-card px-4 py-3 text-center text-xs text-muted-foreground">
+          <BrandFooter />
+        </footer>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { quotes } from '@/lib/quotes';
+import BrandFooter from '@/components/BrandFooter';
 
 // Split-screen shell for the login/register pages: a bold rotating quote on one
 // half, the form on the other. The quote is random on load and cycles every few
@@ -58,6 +59,9 @@ export default function AuthLayout({ children }) {
           </div>
 
           {children}
+
+          {/* Copyright sits under the form on every screen size. */}
+          <BrandFooter className="mt-8 text-center text-xs text-muted-foreground" />
         </div>
       </main>
     </div>
