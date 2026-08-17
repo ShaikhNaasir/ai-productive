@@ -4,6 +4,7 @@ import { calendarService, scheduleService, reminderService } from '@/services/ca
 import { apiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
@@ -78,12 +79,32 @@ export default function Calendar() {
           <CardTitle className="text-base">Add event</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={addSchedule} className="flex flex-col gap-2 sm:flex-row">
-            <Input placeholder="Event title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="flex-1" />
-            <Input type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
-            <Button type="submit">
-              <Plus className="h-4 w-4" /> Add
-            </Button>
+          <form onSubmit={addSchedule} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="event-title">Title</Label>
+              <Input
+                id="event-title"
+                placeholder="e.g. Team standup"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                className="h-11 text-base"
+              />
+            </div>
+            <div className="space-y-1.5 sm:max-w-xs">
+              <Label htmlFor="event-time">Date &amp; time</Label>
+              <Input
+                id="event-time"
+                type="datetime-local"
+                value={form.startTime}
+                onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                className="h-11 text-base"
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" size="lg">
+                <Plus className="h-4 w-4" /> Add event
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -93,33 +114,49 @@ export default function Calendar() {
           <CardTitle className="text-base">Add reminder</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={addReminder} className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              placeholder="Remind me to…"
-              value={reminder.message}
-              onChange={(e) => setReminder({ ...reminder, message: e.target.value })}
-              className="flex-1"
-            />
-            <Input
-              type="datetime-local"
-              value={reminder.remindAt}
-              onChange={(e) => setReminder({ ...reminder, remindAt: e.target.value })}
-            />
-            <select
-              value={reminder.recurrence}
-              onChange={(e) => setReminder({ ...reminder, recurrence: e.target.value })}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              aria-label="Repeat"
-            >
-              {RECURRENCES.map((r) => (
-                <option key={r} value={r}>
-                  {r === 'NONE' ? 'No repeat' : r}
-                </option>
-              ))}
-            </select>
-            <Button type="submit" variant="secondary">
-              <Plus className="h-4 w-4" /> Remind
-            </Button>
+          <form onSubmit={addReminder} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="reminder-message">Reminder</Label>
+              <Input
+                id="reminder-message"
+                placeholder="e.g. Call the dentist"
+                value={reminder.message}
+                onChange={(e) => setReminder({ ...reminder, message: e.target.value })}
+                className="h-11 text-base"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="reminder-time">Remind at</Label>
+                <Input
+                  id="reminder-time"
+                  type="datetime-local"
+                  value={reminder.remindAt}
+                  onChange={(e) => setReminder({ ...reminder, remindAt: e.target.value })}
+                  className="h-11 text-base"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="reminder-repeat">Repeat</Label>
+                <select
+                  id="reminder-repeat"
+                  value={reminder.recurrence}
+                  onChange={(e) => setReminder({ ...reminder, recurrence: e.target.value })}
+                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {RECURRENCES.map((r) => (
+                    <option key={r} value={r}>
+                      {r === 'NONE' ? 'No repeat' : r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" variant="secondary" size="lg">
+                <Plus className="h-4 w-4" /> Add reminder
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
