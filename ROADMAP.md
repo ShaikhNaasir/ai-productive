@@ -98,7 +98,7 @@ change history `CHANGELOG.md`, agent rules `CLAUDE.md`.
 
 ### C1 — Google Calendar sync
 Split into slices. Owner supplied OAuth 2.0 Client credentials (C1 unblocked).
-- [~] **C1.1 — OAuth connect + token storage (backend).** `googleapis` dep; `GoogleAccount`
+- [x] **C1.1 — OAuth connect + token storage (backend).** `googleapis` dep; `GoogleAccount`
   model (per-user refresh token, `calendarId`, reserved `syncToken`); `config.google`
   (client id/secret/redirect URI — absent ⇒ integration disabled, endpoints 503);
   `services/googleCalendar.js` (OAuth2 client, auth URL, code exchange); routes
