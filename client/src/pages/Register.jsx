@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { apiError } from '@/lib/api';
+import AuthLayout from '@/components/AuthLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,10 +33,10 @@ export default function Register() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm">
+    <AuthLayout>
+      <Card className="w-full border-0 shadow-lg sm:border">
         <CardHeader>
-          <CardTitle>Create account</CardTitle>
+          <CardTitle className="text-2xl">Create account</CardTitle>
           <CardDescription>Start organizing your day with AI</CardDescription>
         </CardHeader>
         <CardContent>
@@ -79,7 +80,13 @@ export default function Register() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating…' : 'Create account'}
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Creating…
+                </>
+              ) : (
+                'Create account'
+              )}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
@@ -90,6 +97,6 @@ export default function Register() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   );
 }

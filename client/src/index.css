@@ -56,6 +56,18 @@
   }
 }
 
+/* Auth split-screen quote transition. */
+@keyframes authFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* README-specified task card styling */
 .task-card {
   padding: 16px;
