@@ -27,9 +27,11 @@ async function requireAuth(req, res, next) {
     if (!user || (payload.ver ?? 0) !== (user.tokenVersion ?? 0)) {
       return next(ApiError.unauthorized('Session expired. Please sign in again.'));
     }
-    // A disabled account keeps its valid token but is locked out everywhere.
-    if (user.status === 'DISABLED') {
-      return next(ApiError.forbidden('This account has been disabled.'));
+    // A disabled or deleted account keeps its valid token but is locked out
+    // everywhere. (Blocklist, not `!== ACTIVE`, so a row with a missing status is
+    // never accidentally locked out.)
+    if (user.status === 'DISABLED' || user.status === 'DELETED') {
+      return next(ApiError.forbidden('This account is not active.'));
     }
     req.user = { id: user.id, email: user.email, role: user.role };
     setUserId(user.id);

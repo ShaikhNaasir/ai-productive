@@ -20,6 +20,7 @@ const modelDefaults = {
   aiUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
   googleAccounts: { accessToken: null, expiryDate: null, calendarId: 'primary', syncToken: null, lastSyncedAt: null },
   users: { name: null, tokenVersion: 0, role: 'USER', status: 'ACTIVE', plan: 'FREE', planRenewsAt: null, lastActiveAt: null },
+  adminAuditLogs: { targetUserId: null, meta: null },
 };
 
 function matchCondition(value, cond) {
@@ -242,6 +243,7 @@ function createFakePrisma() {
     taskShare: makeModel('taskShares'),
     aiUsage: makeModel('aiUsage'),
     googleAccount: makeModel('googleAccounts'),
+    adminAuditLog: makeModel('adminAuditLogs'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},

@@ -45,6 +45,7 @@ enum Role {
 enum UserStatus {
   ACTIVE
   DISABLED
+  DELETED
 }
 
 enum Plan {
@@ -294,4 +295,19 @@ model Reminder {
   // is near-useless since the column is overwhelmingly true once reminders age out.
   @@index([sent, remindAt])
   @@map("reminders")
+}
+
+// Append-only trail of admin moderation actions (Roadmap D3). No FK to users so a
+// row survives a hard-deleted target/admin; ids are kept as plain strings.
+model AdminAuditLog {
+  id           String   @id @default(uuid())
+  adminId      String
+  action       String
+  targetUserId String?
+  meta         Json?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetUserId])
+  @@map("admin_audit_logs")
 }

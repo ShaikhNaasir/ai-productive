@@ -168,9 +168,13 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   `fakePrisma` gained `skip` + a minimal `aggregate`. Tests: `admin.test.js` +5
   (metrics/list/search/drill-down/gating, all asserting no content leak). Server 201
   green, lint clean. Migration deferred (`db push`): `users.plan/planRenewsAt/lastActiveAt`.
-- [ ] **D3 — Moderation + audit.** disable/enable, force-logout (tokenVersion bump +
-  socket disconnect), grant/revoke admin, set plan, delete (soft by default) —
-  each with confirms + an `AdminAuditLog` row and self-lock guards.
+- [x] **D3 — Moderation + audit.** `POST /users/:id/{disable,enable,force-logout,role,plan}`
+  and `DELETE /users/:id` (soft by default → `status=DELETED`; `hard:true` cascades) +
+  `GET /audit`. Disable/delete/force-logout bump `tokenVersion` + `disconnectUser`.
+  Guards: no self-disable/delete/self-revoke, and can't remove the last active admin.
+  Every mutation writes an `AdminAuditLog` row (no FK, survives hard-deletes).
+  `UserStatus` gains `DELETED`; auth blocklists DISABLED/DELETED. Tests: `admin.test.js`
+  +8. Server 209 green, lint clean. `db push`: `admin_audit_logs` table, `UserStatus.DELETED`.
 - [ ] **D4 — Admin client.** `/admin` dashboard, users table, per-user drill-down,
   audit log; `ProtectedRoute` gated on `role === 'ADMIN'`; admin-only nav link.
 - [ ] **D5 (later) — SaaS billing.** Payment provider (Stripe/Razorpay), plan

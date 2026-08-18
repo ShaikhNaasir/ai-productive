@@ -21,7 +21,16 @@ router.get(
 );
 
 router.get('/metrics', asyncHandler(ctrl.metrics));
+router.get('/audit', asyncHandler(ctrl.listAudit));
 router.get('/users', asyncHandler(ctrl.listUsers));
 router.get('/users/:id', asyncHandler(ctrl.getUser));
+
+// Moderation (D3) — each writes an audit row.
+router.post('/users/:id/disable', asyncHandler(ctrl.disableUser));
+router.post('/users/:id/enable', asyncHandler(ctrl.enableUser));
+router.post('/users/:id/force-logout', asyncHandler(ctrl.forceLogout));
+router.post('/users/:id/role', asyncHandler(ctrl.setRole));
+router.post('/users/:id/plan', asyncHandler(ctrl.setPlan));
+router.delete('/users/:id', asyncHandler(ctrl.deleteUser));
 
 module.exports = router;

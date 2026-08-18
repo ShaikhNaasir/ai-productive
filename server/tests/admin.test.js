@@ -148,3 +148,89 @@ describe('admin read API — metrics + users (D2)', () => {
     expect((await request(app).get(`/api/admin/users/${userId}`).set(bearer(userToken))).status).toBe(403);
   });
 });
+
+describe('admin moderation + audit (D3)', () => {
+  let adminToken;
+  let adminId;
+
+  beforeAll(async () => {
+    adminToken = (await login('boot-admin@b.com')).body.token;
+    const list = await request(app).get('/api/admin/users?search=boot-admin').set(bearer(adminToken));
+    adminId = list.body.users.find((x) => x.email === 'boot-admin@b.com').id;
+  });
+
+  const newUser = (email) => register(email).then((r) => r.body);
+  const asAdmin = (m, path, body) => request(app)[m](path).set(bearer(adminToken)).send(body || {});
+
+  test('disable locks the account out; enable restores it', async () => {
+    const u = await newUser('mod1@b.com');
+    const dis = await asAdmin('post', `/api/admin/users/${u.user.id}/disable`);
+    expect(dis.status).toBe(200);
+    expect(dis.body.user.status).toBe('DISABLED');
+    // Existing token is revoked (tokenVersion bumped → 401), and a fresh login is
+    // refused because the account is not ACTIVE (403).
+    expect((await request(app).get('/api/tasks').set(bearer(u.token))).status).toBe(401);
+    expect((await login('mod1@b.com')).status).toBe(403);
+
+    const en = await asAdmin('post', `/api/admin/users/${u.user.id}/enable`);
+    expect(en.body.user.status).toBe('ACTIVE');
+    expect((await login('mod1@b.com')).status).toBe(200);
+  });
+
+  test('force-logout invalidates the current token', async () => {
+    const u = await newUser('mod2@b.com');
+    expect((await request(app).get('/api/tasks').set(bearer(u.token))).status).toBe(200);
+    await asAdmin('post', `/api/admin/users/${u.user.id}/force-logout`);
+    expect((await request(app).get('/api/tasks').set(bearer(u.token))).status).toBe(401);
+  });
+
+  test('grant then revoke admin role', async () => {
+    const u = await newUser('mod3@b.com');
+    const g = await asAdmin('post', `/api/admin/users/${u.user.id}/role`, { role: 'ADMIN' });
+    expect(g.body.user.role).toBe('ADMIN');
+    const r = await asAdmin('post', `/api/admin/users/${u.user.id}/role`, { role: 'USER' });
+    expect(r.body.user.role).toBe('USER');
+  });
+
+  test('set plan to PAID', async () => {
+    const u = await newUser('mod4@b.com');
+    const res = await asAdmin('post', `/api/admin/users/${u.user.id}/plan`, { plan: 'PAID' });
+    expect(res.body.user.plan).toBe('PAID');
+  });
+
+  test('soft delete locks out but keeps the record; hard delete removes it', async () => {
+    const soft = await newUser('mod5@b.com');
+    const s = await asAdmin('delete', `/api/admin/users/${soft.user.id}`, {});
+    expect(s.status).toBe(200);
+    expect(s.body).toMatchObject({ deleted: true, hard: false });
+    expect((await login('mod5@b.com')).status).toBe(403);
+    // Record retained — drill-down still resolves.
+    expect((await asAdmin('get', `/api/admin/users/${soft.user.id}`)).status).toBe(200);
+
+    const hard = await newUser('mod6@b.com');
+    const h = await asAdmin('delete', `/api/admin/users/${hard.user.id}`, { hard: true });
+    expect(h.body).toMatchObject({ deleted: true, hard: true });
+    expect((await asAdmin('get', `/api/admin/users/${hard.user.id}`)).status).toBe(404);
+  });
+
+  test('an admin cannot disable, delete, or self-revoke their own account', async () => {
+    expect((await asAdmin('post', `/api/admin/users/${adminId}/disable`)).status).toBe(400);
+    expect((await asAdmin('delete', `/api/admin/users/${adminId}`, {})).status).toBe(400);
+    expect((await asAdmin('post', `/api/admin/users/${adminId}/role`, { role: 'USER' })).status).toBe(400);
+  });
+
+  test('audit log records actions and is admin-gated', async () => {
+    const res = await asAdmin('get', '/api/admin/audit');
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBeGreaterThan(0);
+    expect(res.body.logs.some((l) => l.action === 'user.disable')).toBe(true);
+
+    const u = await newUser('mod7@b.com');
+    expect((await request(app).get('/api/admin/audit').set(bearer(u.token))).status).toBe(403);
+  });
+
+  test('moderation routes are admin-gated', async () => {
+    const u = await newUser('mod8@b.com');
+    expect((await request(app).post(`/api/admin/users/${u.user.id}/disable`).set(bearer(u.token))).status).toBe(403);
+  });
+});

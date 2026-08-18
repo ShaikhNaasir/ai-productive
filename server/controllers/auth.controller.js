@@ -70,8 +70,8 @@ async function login(req, res) {
     throw ApiError.unauthorized('Invalid email or password');
   }
 
-  if (user.status === 'DISABLED') {
-    throw ApiError.forbidden('This account has been disabled.');
+  if (user.status === 'DISABLED' || user.status === 'DELETED') {
+    throw ApiError.forbidden('This account is not active.');
   }
 
   // Self-healing bootstrap: if this email was added to the allowlist after the
