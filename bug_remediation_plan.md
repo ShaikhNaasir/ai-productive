@@ -4,10 +4,32 @@
 
 Automated audit of the AI-Powered Personal Productivity Assistant repository.
 
-## Baseline health
+> ## ✅ ALL 24 ITEMS IMPLEMENTED — 2026-08-18
+>
+> Every bug below has been fixed, tested, and committed across seven slices
+> (`173f14f`, `3cc83ac`, `07971fe`, `c867fa8`, `ec7ca68`, `6e67cca`, `4a28cbd`).
+> The remediation text in each section is preserved as written; where the delivered
+> fix went beyond or differed from the plan, a **Delivered** note records it.
+>
+> | Check | Before | After |
+> | --- | --- | --- |
+> | server Jest | 148 passing | **187 passing** (23 suites) |
+> | client Vitest | 34 passing | **40 passing** (17 files) |
+> | ai-service pytest | not runnable (no venv) | **35 passing** |
+> | server / client lint | clean | clean |
+> | server `npm audit --omit=dev` | 0 vulns | 0 vulns |
+> | client `npm audit` | 1 critical, 1 high, 3 moderate | **0 vulnerabilities** |
+> | client production build | OK | OK (Vite 8, chunking intact) |
+> | Prisma schema | valid | valid (3 new indexes, `Schedule.allDay`) |
+>
+> **Deploy note:** the schema gained `Schedule.allDay` and three composite indexes.
+> Render applies these via `prisma db push`, per the existing convention in
+> `ROADMAP.md` — no migration files were added.
 
-Everything currently in the repo is green. **None of the issues below is a test
-failure** — they are latent defects the existing suites do not cover.
+## Baseline health (at audit time)
+
+Everything in the repo was green when the audit ran. **None of the issues below was a
+test failure** — they were latent defects the existing suites did not cover.
 
 | Check | Result |
 | --- | --- |
@@ -18,37 +40,74 @@ failure** — they are latent defects the existing suites do not cover.
 | `server && npm audit --omit=dev` | ✅ 0 vulnerabilities |
 | `client && npm audit` | ⚠️ 5 (1 critical, 1 high, 3 moderate) — all dev-only, see BUG-12 |
 
-`ai-service` was not executed: no `.venv` exists in this container and
-`requirements.txt` was not installed. Its findings below are from code reading only.
+`ai-service` was not executed at audit time: no `.venv` existed in the container and
+`requirements.txt` was not installed, so its findings were from code reading only.
+**The environment has since been created and its suite runs: 35 tests passing**,
+including two new cases covering BUG-22.
 
 ## Summary
 
-| ID | Severity | Area | Issue | Difficulty |
-| --- | --- | --- | --- | --- |
-| [BUG-01](#bug-01) | 🔴 High | server/tasks | `parentId` accepted on update with no ownership check → cross-user cascade delete | Easy |
-| [BUG-02](#bug-02) | 🔴 High | server/realtime | Socket.IO ignores `tokenVersion`; revoked JWTs keep streaming | Easy |
-| [BUG-03](#bug-03) | 🔴 High | server/google | Calendar sync silently drops everything past the first 250 events | Medium |
-| [BUG-04](#bug-04) | 🟠 Medium | server/google | All-day Google events rewritten as midnight-UTC timed events | Medium |
-| [BUG-05](#bug-05) | 🟠 Medium | server/google | Every pulled event is echoed back to Google on the next sync | Easy |
-| [BUG-06](#bug-06) | 🟠 Medium | server/scheduler | Overdue recurring reminder fires a burst of duplicates | Easy |
-| [BUG-07](#bug-07) | 🟠 Medium | server/scheduler | `setInterval` over async work → overlapping ticks | Easy |
-| [BUG-08](#bug-08) | 🟠 Medium | server/documents | Untruncated document text sent to the LLM | Easy |
-| [BUG-09](#bug-09) | 🟠 Medium | client/focus | Pomodoro counts interval ticks, not wall clock | Medium |
-| [BUG-10](#bug-10) | 🟠 Medium | client/auth | 401 clears the token but not the auth state | Easy |
-| [BUG-11](#bug-11) | 🟠 Medium | server/perf | Unbounded full-table reads in analytics / usage / focus stats | Medium |
-| [BUG-12](#bug-12) | 🟠 Medium | client/deps | `vitest`/`vite` advisories (dev-only) | Medium |
-| [BUG-13](#bug-13) | 🟡 Low | server/search | Keyword search starves tasks | Easy |
-| [BUG-14](#bug-14) | 🟡 Low | server/search | Semantic relevance score can go negative | Easy |
-| [BUG-15](#bug-15) | 🟡 Low | server/habits | Check-in race returns 500 instead of being idempotent | Easy |
-| [BUG-16](#bug-16) | 🟡 Low | server/reminders | `taskId` never ownership-checked | Easy |
-| [BUG-17](#bug-17) | 🟡 Low | server/auth | Login timing side channel enables user enumeration | Easy |
-| [BUG-18](#bug-18) | 🟡 Low | server/focus | Concurrent open sessions accumulate as orphans | Easy |
-| [BUG-19](#bug-19) | 🟡 Low | client/pwa | Static SW cache name never evicts old assets | Easy |
-| [BUG-20](#bug-20) | 🟡 Low | server/ops | No graceful shutdown on SIGTERM | Easy |
-| [BUG-21](#bug-21) | 🟡 Low | server/db | Missing composite indexes for the hot scheduler/usage queries | Easy |
-| [BUG-22](#bug-22) | 🟡 Low | ai-service | Non-ASCII internal key header raises 500 instead of 401 | Easy |
-| [BUG-23](#bug-23) | 🟡 Low | client/tests | `act()` warnings from `PomodoroTimer` | Easy |
-| [BUG-24](#bug-24) | 🟡 Low | server/ai | Worst-case 121.5 s AI request with no response deadline | Easy |
+All items are ✅ **Fixed**. "Commit" is the slice each landed in.
+
+| ID | Severity | Area | Issue | Status | Commit |
+| --- | --- | --- | --- | --- | --- |
+| [BUG-01](#bug-01) | 🔴 High | server/tasks | `parentId` accepted on update with no ownership check → cross-user cascade delete | ✅ | `173f14f` |
+| [BUG-02](#bug-02) | 🔴 High | server/realtime | Socket.IO ignores `tokenVersion`; revoked JWTs keep streaming | ✅ | `173f14f` |
+| [BUG-03](#bug-03) | 🔴 High | server/google | Calendar sync silently drops everything past the first 250 events | ✅ | `3cc83ac` |
+| [BUG-04](#bug-04) | 🟠 Medium | server/google | All-day Google events rewritten as midnight-UTC timed events | ✅ | `3cc83ac` |
+| [BUG-05](#bug-05) | 🟠 Medium | server/google | Every pulled event is echoed back to Google on the next sync | ✅ | `3cc83ac` |
+| [BUG-06](#bug-06) | 🟠 Medium | server/scheduler | Overdue recurring reminder fires a burst of duplicates | ✅ | `07971fe` |
+| [BUG-07](#bug-07) | 🟠 Medium | server/scheduler | `setInterval` over async work → overlapping ticks | ✅ | `07971fe` |
+| [BUG-08](#bug-08) | 🟠 Medium | server/documents | Untruncated document text sent to the LLM | ✅ | `c867fa8` |
+| [BUG-09](#bug-09) | 🟠 Medium | client/focus | Pomodoro counts interval ticks, not wall clock | ✅ | `ec7ca68` |
+| [BUG-10](#bug-10) | 🟠 Medium | client/auth | 401 clears the token but not the auth state | ✅ | `ec7ca68` |
+| [BUG-11](#bug-11) | 🟠 Medium | server/perf | Unbounded full-table reads in analytics / usage / focus stats | ✅ | `c867fa8` |
+| [BUG-12](#bug-12) | 🟠 Medium | client/deps | `vitest`/`vite` advisories (dev-only) | ✅ | `4a28cbd` |
+| [BUG-13](#bug-13) | 🟡 Low | server/search | Keyword search starves tasks | ✅ | `6e67cca` |
+| [BUG-14](#bug-14) | 🟡 Low | server/search | Semantic relevance score can go negative | ✅ | `6e67cca` |
+| [BUG-15](#bug-15) | 🟡 Low | server/habits | Check-in race returns 500 instead of being idempotent | ✅ | `6e67cca` |
+| [BUG-16](#bug-16) | 🟡 Low | server/reminders | `taskId` never ownership-checked | ✅ | `173f14f` |
+| [BUG-17](#bug-17) | 🟡 Low | server/auth | Login timing side channel enables user enumeration | ✅ | `173f14f` |
+| [BUG-18](#bug-18) | 🟡 Low | server/focus | Concurrent open sessions accumulate as orphans | ✅ | `07971fe` |
+| [BUG-19](#bug-19) | 🟡 Low | client/pwa | Static SW cache name never evicts old assets | ✅ | `ec7ca68` |
+| [BUG-20](#bug-20) | 🟡 Low | server/ops | No graceful shutdown on SIGTERM | ✅ | `07971fe` |
+| [BUG-21](#bug-21) | 🟡 Low | server/db | Missing composite indexes for the hot scheduler/usage queries | ✅ | `c867fa8` |
+| [BUG-22](#bug-22) | 🟡 Low | ai-service | Non-ASCII internal key header raises 500 instead of 401 | ✅ | `6e67cca` |
+| [BUG-23](#bug-23) | 🟡 Low | client/tests | `act()` warnings from `PomodoroTimer` | ✅ | `ec7ca68` |
+| [BUG-24](#bug-24) | 🟡 Low | server/ai | Worst-case 121.5 s AI request with no response deadline | ✅ | `ec7ca68`¹ |
+
+¹ BUG-24 landed in `c867fa8` alongside the other cost/performance work.
+
+### Where the delivered fix differed from the plan
+
+Five items needed more than the plan specified. Each is detailed in its section:
+
+- **BUG-01** — the plan's guard covered re-parenting *under* a bad parent. It missed
+  the mirror case: re-parenting a task that already *has* subtasks, which also
+  produces two-level nesting. Added a child-count check.
+- **BUG-05** — the plan put the watermark immediately after the pull. That still
+  leaves step 2's `googleEventId` writes past the watermark, so freshly-pushed events
+  were re-pushed once. Moved it after the last local write of the run instead.
+- **BUG-11** — narrowing the reads changes `total` / `totalCostUsd` from all-time to
+  windowed. Rather than leave that ambiguous, the endpoints now report `windowDays`
+  and the Analytics card labels the window in the UI.
+- **BUG-12** — Vite 8 bundles with rolldown, which rejects the object form of
+  `manualChunks`, and its native config loader drops the CJS globals. Both needed
+  migrating beyond the dependency bump.
+- **BUG-22** — the plan's test sent a non-ASCII header as a `str`; httpx refuses to
+  encode that client-side. The test sends raw bytes, matching how Starlette actually
+  receives and latin-1 decodes a real request.
+
+### Test-helper work this required
+
+`server/tests/helpers/fakePrisma.js` was missing query surface the fixes depend on.
+Added, so the new behaviour is genuinely exercised rather than silently ignored:
+
+- **UUID-shaped ids** (was a bare counter) — the `.uuid()` body validators now behave
+  in tests as they do against Prisma's real `@default(uuid())`.
+- **`select`** — column projections are verified; a controller reading an unselected
+  field now fails in tests the way it would in production.
+- **`take`**, **`upsert`** (with compound-unique `where`), **`updateMany`**.
 
 ---
 
@@ -116,6 +175,23 @@ async function update(req, res) {
 
 `assertValidParent` already calls `getOwnedTask` (404s on another user's task) and
 rejects a parent that is itself a subtask, so this one guard closes all three holes.
+
+> **Delivered** (`173f14f`). Implemented as written, plus one case the plan missed:
+> the guard above rejects nesting *under* a subtask, but not nesting a task that
+> already *has* subtasks — equally a route to two-level depth. Added:
+>
+> ```js
+> if (data.parentId) {
+>   const childCount = await prisma.task.count({ where: { parentId: prior.id } });
+>   if (childCount > 0) {
+>     throw ApiError.badRequest('Cannot nest a task that has subtasks of its own');
+>   }
+> }
+> ```
+>
+> Six tests added across `task.test.js` and `share.test.js`, including the full
+> escalation path: an EDIT sharee attempting the re-parent gets 403 and the owner's
+> task is verified still top-level.
 
 **Tests to add** (`server/tests/task.test.js`):
 - update with a `parentId` owned by another user → 404
@@ -408,8 +484,19 @@ await prisma.googleAccount.update({
 `locallyChanged` is still snapshotted *before* the pull against the previous watermark,
 so real local edits made before this run are unaffected.
 
-**Tests to add** (`server/tests/googleSync.test.js`): run `syncUser` twice with an
-unchanged remote event; assert `updateEvent` is never called on the second run.
+> **Delivered** (`3cc83ac`), with the watermark placed later than the plan specified.
+> Stamping it right after the pull still leaves step 2's `googleEventId` writes on the
+> far side of it, so every freshly-pushed event was re-pushed once on the following
+> run. It is now taken after step 2 — the last local write of the run, since step 3
+> only reads and calls Google:
+>
+> ```js
+> const localWritesCompletedAt = new Date();
+> ```
+>
+> Three tests: a pulled event is not echoed back, a just-pushed event is not
+> re-pushed, and a genuine local edit *is* still pushed (guarding against the
+> over-correction of suppressing real edits).
 
 **Difficulty:** Easy (~30 min)
 
@@ -737,6 +824,20 @@ which pushes the sum into Postgres.
 rows outside the window are excluded from `perDay` but still counted in the aggregate
 total (whichever semantics you pick).
 
+> **Delivered** (`c867fa8`). The contract question the plan flagged was resolved in
+> favour of **windowed, explicitly labelled** rather than a silent semantic change:
+>
+> - `GET /api/ai/usage` takes an optional `?days=` (clamped 7–365, default 30) and
+>   returns `windowDays`; the Analytics card renders "last 30 days" beside the title
+>   so windowed totals cannot be misread as all-time.
+> - `GET /api/focus/stats` scopes `total` and `perTask` to the same 7 days it charts,
+>   and returns `windowDays`.
+> - Task counts in `summary`/`trends` are all-time *by definition*, so those reads
+>   stay unbounded — but are now projected to four columns, which also stops the
+>   1024-dimension `embedding` (~4KB/row) being dragged along.
+>
+> `fakePrisma` gained `select` support so the projections are actually verified.
+
 **Difficulty:** Medium (~1.5 h — decide the all-time vs. windowed contract first)
 
 ---
@@ -773,6 +874,21 @@ npm test && npm run build && npm run lint
 
 Expect churn in `vite.config.js` (Vitest config moved out of `defineConfig`'s `test` key
 in recent majors) and in `src/test/setup.js`. Worth its own commit and its own slice.
+
+> **Delivered** (`4a28cbd`) — `vite@8.2.1`, `vitest@4.1.10`, `@vitejs/plugin-react@6`,
+> `jsdom@latest`. **`npm audit` now reports 0 vulnerabilities.**
+>
+> Config migration needed three changes, two of which the plan did not anticipate:
+> - `defineConfig` imported from `vitest/config` so the `test` block is still honoured
+>   *(anticipated)*.
+> - Vite 8 bundles with **rolldown**, which rejects the object form of `manualChunks`
+>   — rewritten as a function; the `react` and `charts` chunks still split as before.
+> - `__dirname` → `import.meta.dirname`; Vite 8's native config loader does not
+>   provide the CJS globals.
+>
+> `src/test/setup.js` needed no change, and no test required modification. Verified:
+> 40 tests green on Vitest 4, production build clean with chunking intact, SW
+> build-id stamping still applied in `dist/sw.js`, dev server serves HTTP 200.
 
 **Difficulty:** Medium (~2 h — major-version upgrade with config migration)
 
@@ -1033,6 +1149,22 @@ def require_internal_key(x_internal_key: str = Header(default="")):
 Byte comparison keeps the constant-time property. Add a case to
 `ai-service/tests/test_config_security.py`.
 
+> **Delivered** (`6e67cca`), with a corrected test. The plan's version sends the
+> header as a `str`, but httpx refuses to encode a non-ASCII str header client-side —
+> the request never reaches the app. Real HTTP headers are bytes, which Starlette
+> decodes as latin-1, so the test sends `b"caf\xe9"` and the dependency receives
+> `'café'`. Confirmed the bug and the fix directly:
+>
+> ```
+> hmac.compare_digest('café', 'dev-internal-key')  → TypeError  (this was the 500)
+> hmac.compare_digest(b'caf\xc3\xa9', b'dev-...')  → False      (clean 401)
+> ```
+>
+> The new test was verified to **fail against the previous implementation** and pass
+> against this one. Landed in `tests/test_ai.py` (alongside the existing
+> `test_requires_internal_key`) rather than `test_config_security.py`, since it
+> exercises the endpoint dependency rather than config validation.
+
 **Difficulty:** Easy (~15 min)
 
 ---
@@ -1104,30 +1236,53 @@ async function call(path, body) {
 
 ---
 
-## Suggested sequencing
+## Sequencing (as executed)
 
-Each group is an independently shippable slice with its own tests, per `CLAUDE.md`.
+Each group shipped as an independently verified slice with its own tests, per `CLAUDE.md`.
 
-1. **Security** — BUG-01, BUG-02, BUG-16, BUG-17. Small, self-contained, highest value.
-2. **Google Calendar sync** — BUG-03, BUG-05, BUG-04. Fix pagination and the echo-back
-   before the all-day round-trip; BUG-05 is what makes BUG-04 bite.
-3. **Schedulers & background work** — BUG-06, BUG-07, BUG-18, BUG-20.
-4. **Cost & performance** — BUG-08, BUG-11, BUG-21, BUG-24.
-5. **Client correctness** — BUG-09, BUG-10, BUG-23, BUG-19.
-6. **Search polish** — BUG-13, BUG-14, BUG-15, BUG-22.
-7. **Dependency upgrade** — BUG-12, on its own.
+| # | Slice | Items | Commit |
+| --- | --- | --- | --- |
+| 1 | Security | BUG-01, 02, 16, 17 | `173f14f` |
+| 2 | Google Calendar sync | BUG-03, 05, 04 | `3cc83ac` |
+| 3 | Schedulers & background work | BUG-06, 07, 18, 20 | `07971fe` |
+| 4 | Cost & performance | BUG-08, 11, 21, 24 | `c867fa8` |
+| 5 | Client correctness | BUG-09, 10, 23, 19 | `ec7ca68` |
+| 6 | Search polish | BUG-13, 14, 15, 22 | `6e67cca` |
+| 7 | Dependency upgrade | BUG-12 | `4a28cbd` |
 
-## Verification for every slice
+## Verification
+
+Run after every slice; all green at `4a28cbd`:
 
 ```bash
-cd server     && npm run lint && npm test
-cd client     && npm run lint && npm test && npm run build
-cd ai-service && .venv/Scripts/python -m pytest    # venv not present in this container
+cd server     && npm run lint && npm test          # 23 suites, 187 tests
+cd client     && npm run lint && npm test && npm run build   # 17 files, 40 tests
+cd ai-service && .venv/bin/python -m pytest        # 35 tests
 ```
+
+Beyond the suites, these fixes were verified by direct observation rather than by
+test assertion alone:
+
+- **BUG-20** — sent a real `SIGTERM` to a running server: logged the graceful path
+  and exited 0, without hitting the 10s force-exit fallback.
+- **BUG-19** — inspected `dist/sw.js` after a build; `__BUILD_ID__` is substituted.
+- **BUG-22** — the new test fails against the pre-fix `main.py` and passes after.
+- **BUG-12** — dev server booted on Vite 8 and served HTTP 200.
+- **Schema** — `prisma validate` passes; `prisma generate` succeeds.
+
+> **Note on `ai-service`:** the plan recorded its findings as code-reading only,
+> because no `.venv` existed. The environment has since been created
+> (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`) and the suite
+> runs clean. Note the command differs from `CLAUDE.md`, which documents the Windows
+> path `.venv/Scripts/python`; on Linux it is `.venv/bin/python`.
 
 ---
 
-## Status: awaiting approval
+## Status: complete
 
-**No code has been modified.** This file is the only change. Review the plan and confirm
-which slice to implement before any code-writing begins.
+All 24 items implemented, tested, and committed on `claude/beautiful-einstein-r9hm2f`.
+Every suite green, all lint clean, 0 npm vulnerabilities in both packages.
+
+The one thing needing a human decision is the **deploy**: the Prisma schema gained
+`Schedule.allDay` and three composite indexes, which Render applies via
+`prisma db push` on the next deploy.
