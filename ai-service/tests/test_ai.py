@@ -464,3 +464,46 @@ def test_provider_unavailable_surfaces_503(monkeypatch):
     monkeypatch.setattr(task_planner, "complete_json", boom)
     res = client.post("/breakdown", json={"title": "do a thing"}, headers=KEY)
     assert res.status_code == 503
+
+
+def test_embed_passes_query_input_type(monkeypatch):
+    from schemas import EmbedResponse
+
+    captured = {}
+
+    def fake_embed(texts, input_type="document"):
+        captured["texts"] = texts
+        captured["input_type"] = input_type
+        return EmbedResponse(embeddings=[[0.1, 0.2]], model="voyage-3", dimensions=2)
+
+    monkeypatch.setattr(main.embeddings_mod, "embed", fake_embed)
+    res = client.post(
+        "/embed", json={"input": ["find my notes"], "input_type": "query"}, headers=KEY
+    )
+    assert res.status_code == 200
+    assert captured["texts"] == ["find my notes"]
+    assert captured["input_type"] == "query"
+
+
+def test_embed_defaults_to_document_input_type(monkeypatch):
+    from schemas import EmbedResponse
+
+    captured = {}
+
+    def fake_embed(texts, input_type="document"):
+        captured["input_type"] = input_type
+        return EmbedResponse(embeddings=[[0.1]], model="voyage-3", dimensions=1)
+
+    monkeypatch.setattr(main.embeddings_mod, "embed", fake_embed)
+    res = client.post("/embed", json={"input": ["a document"]}, headers=KEY)
+    assert res.status_code == 200
+    assert captured["input_type"] == "document"
+
+
+def test_embed_rejects_unknown_input_type():
+    # Literal["query", "document"] validation rejects anything else before the
+    # provider is ever called.
+    res = client.post(
+        "/embed", json={"input": ["x"], "input_type": "banana"}, headers=KEY
+    )
+    assert res.status_code == 422

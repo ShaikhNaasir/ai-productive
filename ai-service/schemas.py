@@ -100,6 +100,8 @@ class ChatResponse(BaseModel):
 
 class EmbedRequest(BaseModel):
     input: list[str] = Field(min_length=1)
+    # Voyage ranks a query against documents better when told which it is embedding.
+    input_type: Literal["query", "document"] = "document"
 
 
 class EmbedResponse(BaseModel):

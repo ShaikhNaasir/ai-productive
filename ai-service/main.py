@@ -117,4 +117,4 @@ def chat_endpoint(req: ChatRequest, response: Response, _=Depends(require_intern
 
 @app.post("/embed", response_model=EmbedResponse)
 def embed_endpoint(req: EmbedRequest, _=Depends(require_internal_key)):
-    return _guard(embeddings_mod.embed, req.input)
+    return _guard(embeddings_mod.embed, req.input, req.input_type)

@@ -106,7 +106,7 @@ const aiClient = {
   planDay: (payload) => call('/plan-day', payload),
   prioritize: (tasks, now) => call('/prioritize', { tasks, now }),
   chat: (message, context, history) => call('/chat', { message, context, history }),
-  embed: (input) => call('/embed', { input }),
+  embed: (input, inputType) => call('/embed', inputType ? { input, input_type: inputType } : { input }),
 };
 
 module.exports = aiClient;
