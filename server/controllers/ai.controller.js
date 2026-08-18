@@ -278,11 +278,10 @@ async function reindex(req, res) {
     prisma.task.findMany({ where: { userId } }),
     prisma.note.findMany({ where: { userId } }),
   ]);
-  await Promise.all([
-    ...tasks.map((t) => embeddingService.indexTask(t)),
-    ...notes.map((n) => embeddingService.indexNote(n)),
-  ]);
-  res.json({ indexed: tasks.length + notes.length });
+  // Batch into one embed call and report how many rows were actually indexed,
+  // not how many were attempted — a partial provider failure must be visible.
+  const { indexed, failed, total } = await embeddingService.reindexAll(tasks, notes);
+  res.json({ indexed, failed, total });
 }
 
 module.exports = { parseTask, createTaskFromText, breakdownTask, planDay, acceptPlan, summarize, prioritize, chat, usage, reindex };
