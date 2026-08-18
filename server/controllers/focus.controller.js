@@ -92,8 +92,17 @@ async function stop(req, res) {
 }
 
 // Aggregate tracked time per task and per day (last 7 days), plus the total.
+// `total` and `perTask` cover the same 7-day window as `perDay` — reading every
+// session ever recorded to render a one-week chart does not scale.
 async function stats(req, res) {
-  const sessions = await prisma.focusSession.findMany({ where: { userId: req.user.id } });
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - 6);
+  since.setUTCHours(0, 0, 0, 0);
+
+  const sessions = await prisma.focusSession.findMany({
+    where: { userId: req.user.id, startedAt: { gte: since } },
+    select: { startedAt: true, seconds: true, taskId: true },
+  });
 
   const days = [];
   const today = new Date();
@@ -114,11 +123,12 @@ async function stats(req, res) {
   }
 
   const perDay = days.map((d) => ({ date: d, seconds: secondsByDay[d] }));
+  const windowDays = days.length;
   const perTask = Object.entries(secondsByTask)
     .map(([taskId, seconds]) => ({ taskId, seconds }))
     .sort((a, b) => b.seconds - a.seconds);
 
-  res.json({ total, perDay, perTask });
+  res.json({ total, windowDays, perDay, perTask });
 }
 
 module.exports = { start, stop, active, stats };

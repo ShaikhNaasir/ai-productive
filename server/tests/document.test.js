@@ -60,6 +60,24 @@ describe('document upload + summarization', () => {
     expect(notes.body.notes.some((n) => n.title === 'meeting-notes')).toBe(true);
   });
 
+  test('truncates a large document before sending it to the LLM', async () => {
+    aiClient.summarize.mockClear();
+    aiClient.summarize.mockResolvedValue({ key_points: [], summary: '' });
+    // Well past the 40k summarization cap; a 2MB PDF can extract to far more.
+    const huge = 'x'.repeat(200000);
+
+    const res = await request(app)
+      .post('/api/documents/upload')
+      .set(auth())
+      .attach('file', Buffer.from(huge), { filename: 'huge.txt', contentType: 'text/plain' });
+
+    expect(res.status).toBe(201);
+    const sent = aiClient.summarize.mock.calls[0][0];
+    expect(sent.length).toBe(40000);
+    // Stored content keeps its own, larger cap.
+    expect(res.body.note.content.length).toBe(100000);
+  });
+
   test('still stores the note when the AI service is unavailable', async () => {
     const ApiError = require('../utils/ApiError');
     aiClient.summarize.mockRejectedValue(new ApiError(503, 'AI unavailable'));

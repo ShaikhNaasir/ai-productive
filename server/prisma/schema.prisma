@@ -194,7 +194,7 @@ model FocusSession {
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
-  @@index([userId])
+  @@index([userId, startedAt])
   @@index([taskId])
   @@map("focus_sessions")
 }
@@ -247,8 +247,7 @@ model AiUsage {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([createdAt])
+  @@index([userId, createdAt])
   @@map("ai_usage")
 }
 
@@ -267,6 +266,8 @@ model Reminder {
 
   @@index([userId])
   @@index([remindAt])
-  @@index([sent])
+  // The scheduler's hot query filters sent + remindAt together; a lone `sent` index
+  // is near-useless since the column is overwhelmingly true once reminders age out.
+  @@index([sent, remindAt])
   @@map("reminders")
 }

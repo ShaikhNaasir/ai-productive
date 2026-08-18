@@ -88,5 +88,39 @@ describe('AI usage summary', () => {
     expect(summarize.costUsd).toBeCloseTo(0.0525, 6);
     // Sorted by cost desc — summarize (0.0525) before chat (0.0075).
     expect(res.body.byEndpoint[0].endpoint).toBe('summarize');
+    // Totals are scoped to a reporting window rather than every row ever written.
+    expect(res.body.windowDays).toBe(30);
+  });
+
+  test('excludes rows older than the reporting window', async () => {
+    const ancient = new Date();
+    ancient.setUTCDate(ancient.getUTCDate() - 400);
+    await prisma.aiUsage.create({
+      data: {
+        userId,
+        endpoint: 'chat',
+        model: 'claude-opus-4-8',
+        inputTokens: 100000,
+        outputTokens: 100000,
+        costUsd: 42,
+        createdAt: ancient,
+      },
+    });
+
+    const res = await request(app).get('/api/ai/usage').set(auth());
+    expect(res.status).toBe(200);
+    // The 400-day-old row is outside the default 30-day window.
+    expect(res.body.totalCostUsd).toBeCloseTo(0.06, 6);
+    expect(res.body.callCount).toBe(3);
+  });
+
+  test('the window is caller-adjustable and clamped', async () => {
+    const wide = await request(app).get('/api/ai/usage?days=400').set(auth());
+    expect(wide.body.windowDays).toBe(365);
+    // The 400-day-old row is still outside even the maximum window.
+    expect(wide.body.callCount).toBe(3);
+
+    const narrow = await request(app).get('/api/ai/usage?days=1').set(auth());
+    expect(narrow.body.windowDays).toBe(7); // clamped up to the minimum
   });
 });

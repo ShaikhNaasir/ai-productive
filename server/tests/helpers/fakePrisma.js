@@ -112,6 +112,16 @@ function applyInclude(records, include, allRows) {
   });
 }
 
+// Project a row down to the requested fields, so a controller that reads a column it
+// did not select fails here the same way it would against a real projected query.
+function applySelect(records, select) {
+  if (!select) return records;
+  const fields = Object.entries(select)
+    .filter(([, on]) => on)
+    .map(([field]) => field);
+  return records.map((r) => Object.fromEntries(fields.map((f) => [f, r[f]])));
+}
+
 function makeModel(name) {
   const rows = [];
   const defaults = modelDefaults[name] || {};
@@ -121,16 +131,18 @@ function makeModel(name) {
       const [field, val] = Object.entries(where)[0];
       return rows.find((r) => r[field] === val) || null;
     },
-    findFirst: async ({ where, orderBy, include } = {}) => {
+    findFirst: async ({ where, orderBy, include, select } = {}) => {
       const filtered = rows.filter((r) => matchWhere(r, where));
       const found = applyOrderBy(filtered, orderBy)[0] || null;
       if (!found) return null;
-      return include ? applyInclude([found], include, rows)[0] : found;
+      if (include) return applyInclude([found], include, rows)[0];
+      return applySelect([found], select)[0];
     },
-    findMany: async ({ where, orderBy, include } = {}) => {
+    findMany: async ({ where, orderBy, include, select, take } = {}) => {
       const filtered = rows.filter((r) => matchWhere(r, where));
-      const ordered = applyOrderBy(filtered, orderBy);
-      return applyInclude(ordered, include, rows);
+      let ordered = applyOrderBy(filtered, orderBy);
+      if (take != null) ordered = ordered.slice(0, take);
+      return include ? applyInclude(ordered, include, rows) : applySelect(ordered, select);
     },
     count: async ({ where } = {}) => rows.filter((r) => matchWhere(r, where)).length,
     create: async ({ data }) => {

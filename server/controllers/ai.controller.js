@@ -206,7 +206,18 @@ async function chat(req, res) {
 // Per-user AI usage & cost summary (Roadmap C3): totals, per-endpoint breakdown,
 // and the last 7 days of spend.
 async function usage(req, res) {
-  const rows = await prisma.aiUsage.findMany({ where: { userId: req.user.id } });
+  // Bounded to the reporting window rather than every row the account has ever
+  // written. `windowDays` (default 30) covers the 7-day chart plus useful history;
+  // the response says which window the totals cover so the client can label it.
+  const windowDays = Math.min(365, Math.max(7, Number(req.query.days) || 30));
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - (windowDays - 1));
+  since.setUTCHours(0, 0, 0, 0);
+
+  const rows = await prisma.aiUsage.findMany({
+    where: { userId: req.user.id, createdAt: { gte: since } },
+    select: { endpoint: true, inputTokens: true, outputTokens: true, costUsd: true, createdAt: true },
+  });
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
@@ -244,6 +255,7 @@ async function usage(req, res) {
 
   const round = (n) => Math.round(n * 1e6) / 1e6;
   res.json({
+    windowDays,
     callCount: rows.length,
     totalInputTokens,
     totalOutputTokens,
