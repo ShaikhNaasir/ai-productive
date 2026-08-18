@@ -95,6 +95,24 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Semantic search index no longer silently drops records.** `reindex` fired one
+  embed call per record (`Promise.all` over every row). On the free-tier AI service
+  that storms the provider; a slice of the calls rate-limit and, because
+  `indexRecord` swallows failures, those rows keep a `NULL` embedding and become
+  unfindable by semantic search — notes were not returned for their own content.
+  Reindex now batches every text into a single `aiClient.embed` call, persists each
+  vector, and returns the real `indexed` / `failed` / `total` counts instead of the
+  attempted count. (Found by `/qa` deep pass.)
+- **Search queries are embedded as queries, not documents.** The `/embed` endpoint
+  always used Voyage `input_type="document"`, so a search query was encoded the same
+  way as the notes/tasks it was compared against; Voyage's asymmetric encoding
+  retrieves worse that way. An optional `input_type` now threads through
+  `aiClient.embed` → `/embed` → `embeddings.embed` (validated `query|document`,
+  default `document`), and query embedding passes `"query"`.
+- **All-day calendar events no longer show a misleading clock time.** All-day
+  schedule events are stored as midnight UTC, so the agenda rendered them with a
+  local time (e.g. "Conference day — 5:30 AM" in IST). All-day schedule events now
+  render the date only; timed events keep their time.
 - **Focus timer "Validation failed" on start.** `POST /api/focus/start` rejected
   any `startedAt` in the future, so a device whose clock ran even slightly fast
   could never start a session. The server now clamps a future `startedAt` to now
