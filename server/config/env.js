@@ -43,6 +43,14 @@ const config = {
   // core CRUD never blocks on embeddings; enable in production once configured.
   embeddingsEnabled: process.env.EMBEDDINGS_ENABLED === 'true',
   databaseUrl: process.env.DATABASE_URL,
+  // Bootstrap admins. Emails in this comma-separated allowlist are granted role
+  // ADMIN on register (and promoted on their next login). Deliberately read from
+  // the environment only — never hardcode a real address, since this repo is
+  // public. Empty by default, so no account is silently privileged.
+  adminEmails: (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 };
 
 // In production the shared internal key must be a real, non-default secret —

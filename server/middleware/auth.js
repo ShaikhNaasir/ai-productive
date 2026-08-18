@@ -27,7 +27,11 @@ async function requireAuth(req, res, next) {
     if (!user || (payload.ver ?? 0) !== (user.tokenVersion ?? 0)) {
       return next(ApiError.unauthorized('Session expired. Please sign in again.'));
     }
-    req.user = { id: user.id, email: user.email };
+    // A disabled account keeps its valid token but is locked out everywhere.
+    if (user.status === 'DISABLED') {
+      return next(ApiError.forbidden('This account has been disabled.'));
+    }
+    req.user = { id: user.id, email: user.email, role: user.role };
     setUserId(user.id);
     return next();
   } catch (err) {
@@ -36,4 +40,13 @@ async function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { requireAuth };
+// Gates admin-only routes. Must be chained after requireAuth, which loads the role.
+// This is the single sanctioned exception to per-user data scoping.
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'ADMIN') {
+    return next(ApiError.forbidden('Admin access required'));
+  }
+  return next();
+}
+
+module.exports = { requireAuth, requireAdmin };

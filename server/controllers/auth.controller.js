@@ -2,6 +2,7 @@
 
 const bcrypt = require('bcryptjs');
 const prisma = require('../models/prisma');
+const config = require('../config/env');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { disconnectUser } = require('../realtime');
 const ApiError = require('../utils/ApiError');
@@ -20,7 +21,13 @@ const SALT_ROUNDS = 10;
 const DUMMY_HASH = bcrypt.hashSync('unused-placeholder-password', SALT_ROUNDS);
 
 function serializeUser(user) {
-  return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
+  return { id: user.id, email: user.email, name: user.name, role: user.role, createdAt: user.createdAt };
+}
+
+// Emails in the ADMIN_EMAILS allowlist bootstrap as admins. The allowlist lives
+// only in the environment (never in source), so nothing here reveals who that is.
+function isAdminEmail(email) {
+  return config.adminEmails.includes(String(email).toLowerCase());
 }
 
 function issueToken(user) {
@@ -37,7 +44,12 @@ async function register(req, res) {
 
   const passwordHash = await bcrypt.hash(data.password, SALT_ROUNDS);
   const user = await prisma.user.create({
-    data: { email: data.email, passwordHash, name: data.name },
+    data: {
+      email: data.email,
+      passwordHash,
+      name: data.name,
+      role: isAdminEmail(data.email) ? 'ADMIN' : 'USER',
+    },
   });
 
   res.status(201).json({ user: serializeUser(user), token: issueToken(user) });
@@ -58,7 +70,19 @@ async function login(req, res) {
     throw ApiError.unauthorized('Invalid email or password');
   }
 
-  res.json({ user: serializeUser(user), token: issueToken(user) });
+  if (user.status === 'DISABLED') {
+    throw ApiError.forbidden('This account has been disabled.');
+  }
+
+  // Self-healing bootstrap: if this email was added to the allowlist after the
+  // account existed, promote it now. Never auto-demotes — revoking admin is an
+  // explicit admin action.
+  let account = user;
+  if (isAdminEmail(user.email) && user.role !== 'ADMIN') {
+    account = await prisma.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } });
+  }
+
+  res.json({ user: serializeUser(account), token: issueToken(account) });
 }
 
 // Best-effort server-side revocation: if a valid token is presented, bump the

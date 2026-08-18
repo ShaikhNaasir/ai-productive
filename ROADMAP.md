@@ -140,3 +140,32 @@ Split into two slices.
 - [x] `GET /api/ai/usage` — per-user totals, per-endpoint breakdown, last-7-days spend; "AI usage & cost" card on Analytics.
 - [x] Tests: pytest usage headers (2) + `aiCost`/usage aggregation (Jest, 6) + Analytics card (Vitest, 1); `fakePrisma` gains `aiUsage`. ai-service 15 green, server 112 green, client 20 green, lint clean, build OK.
 - [~] DB migration: schema validates + `prisma generate` OK offline. `prisma migrate dev` deferred — needs live Supabase `DATABASE_URL` (standing blocker; Render uses `db push`).
+
+## Tier D — Admin panel (in progress)
+
+Custom, in the existing stack (role-gated Express API + React `/admin` pages) —
+not a library, so admins see **metadata + aggregates only**, never private user
+content (task titles, note bodies). One sanctioned exception to per-user scoping,
+centralized behind `requireAdmin` and audited. Bootstrap admins via an
+`ADMIN_EMAILS` env allowlist (kept out of this public repo — real value lives only
+in `.env` / the host env; `render.yaml` uses `sync: false`). Anticipates a future
+free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
+
+- [x] **D1 — Roles + guard foundation.** `Role` (USER/ADMIN) + `UserStatus`
+  (ACTIVE/DISABLED) on `User`; `requireAdmin` middleware; `requireAuth` now loads
+  the role and locks out DISABLED accounts (403 everywhere, and at login);
+  `ADMIN_EMAILS` allowlist bootstraps admins on register and promotes them on
+  login (never auto-demotes). `/api/admin/ping` is the first guarded route. Auth
+  responses carry `user.role`. Tests: `admin.test.js` (5) — bootstrap, 403 for
+  non-admins, login promotion, disabled lockout, unauth 401. Server 196 green,
+  lint clean. Migration deferred (`db push`): `users.role`, `users.status`.
+- [ ] **D2 — Metrics + users read API.** `GET /api/admin/metrics` (totals, signups,
+  active, plan breakdown, AI spend) and `/api/admin/users` + `/:id` — metadata and
+  aggregate counts only, paginated. Adds `User.plan`/`planRenewsAt`/`lastActiveAt`.
+- [ ] **D3 — Moderation + audit.** disable/enable, force-logout (tokenVersion bump +
+  socket disconnect), grant/revoke admin, set plan, delete (soft by default) —
+  each with confirms + an `AdminAuditLog` row and self-lock guards.
+- [ ] **D4 — Admin client.** `/admin` dashboard, users table, per-user drill-down,
+  audit log; `ProtectedRoute` gated on `role === 'ADMIN'`; admin-only nav link.
+- [ ] **D5 (later) — SaaS billing.** Payment provider (Stripe/Razorpay), plan
+  upgrades + webhooks, paid-tier gating. Separate epic; provider TBD.

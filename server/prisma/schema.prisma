@@ -37,6 +37,16 @@ enum ShareRole {
   EDIT
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -45,6 +55,10 @@ model User {
   // Bumped on logout / password change to invalidate previously issued JWTs
   // (the token carries this version and is rejected once it no longer matches).
   tokenVersion Int        @default(0)
+  // Admin panel (Roadmap D). role gates /api/admin/*; a DISABLED account is
+  // rejected everywhere and cannot log in.
+  role         Role       @default(USER)
+  status       UserStatus @default(ACTIVE)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 

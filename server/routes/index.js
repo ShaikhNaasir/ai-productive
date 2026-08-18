@@ -22,5 +22,6 @@ router.use('/focus', require('./focus.routes'));
 router.use('/documents', require('./document.routes'));
 router.use('/habits', require('./habit.routes'));
 router.use('/search', require('./search.routes'));
+router.use('/admin', require('./admin.routes'));
 
 module.exports = router;

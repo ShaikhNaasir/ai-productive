@@ -60,6 +60,10 @@ services:
         sync: false          # e.g. https://productivity-api.onrender.com/api/google/callback
       - key: GOOGLE_SYNC_INTERVAL_MS
         value: "300000"      # background two-way sync cadence (5 min)
+      # Admin panel (Roadmap D). Comma-separated allowlist of admin emails; set the
+      # real value in the dashboard (sync:false keeps it out of this public repo).
+      - key: ADMIN_EMAILS
+        sync: false
       - fromGroup: shared-secrets
 
   # ---- FastAPI AI service ----
