@@ -120,6 +120,100 @@ describe('googleSync (C1.2)', () => {
     expect(googleCalendar.updateEvent).not.toHaveBeenCalled();
   });
 
+  test('a pulled event is not echoed back to Google on the next sync', async () => {
+    await connect('userE', { lastSyncedAt: new Date(Date.now() - 3600000) });
+    googleCalendar.listEvents.mockResolvedValueOnce({
+      events: [gEvent('gE', { summary: 'from google' })],
+      nextSyncToken: 'tokE1',
+    });
+    await googleSync.syncUser('userE');
+    googleCalendar.updateEvent.mockClear();
+
+    // Second run: nothing changed remotely, so the pulled row must not be pushed up.
+    googleCalendar.listEvents.mockResolvedValueOnce({ events: [], nextSyncToken: 'tokE2' });
+    await googleSync.syncUser('userE');
+
+    expect(googleCalendar.updateEvent).not.toHaveBeenCalled();
+  });
+
+  test('an event we just pushed is not re-pushed on the next sync', async () => {
+    await connect('userN', { lastSyncedAt: new Date(Date.now() - 3600000) });
+    await prisma.schedule.create({
+      data: { userId: 'userN', title: 'brand new', startTime: iso('2026-08-09T09:00:00Z') },
+    });
+    googleCalendar.listEvents.mockResolvedValueOnce({ events: [], nextSyncToken: 'tokN1' });
+    googleCalendar.insertEvent.mockResolvedValueOnce({ id: 'gN-created' });
+    await googleSync.syncUser('userN');
+    googleCalendar.updateEvent.mockClear();
+    googleCalendar.insertEvent.mockClear();
+
+    googleCalendar.listEvents.mockResolvedValueOnce({ events: [], nextSyncToken: 'tokN2' });
+    await googleSync.syncUser('userN');
+
+    expect(googleCalendar.insertEvent).not.toHaveBeenCalled();
+    expect(googleCalendar.updateEvent).not.toHaveBeenCalled();
+  });
+
+  test('a genuine local edit is still pushed to Google', async () => {
+    await connect('userL', { lastSyncedAt: new Date(Date.now() - 3600000) });
+    googleCalendar.listEvents.mockResolvedValueOnce({
+      events: [gEvent('gL', { summary: 'original' })],
+      nextSyncToken: 'tokL1',
+    });
+    await googleSync.syncUser('userL');
+    googleCalendar.updateEvent.mockClear();
+
+    // The user edits the linked schedule locally after the sync settled.
+    const row = await prisma.schedule.findFirst({ where: { userId: 'userL', googleEventId: 'gL' } });
+    await new Promise((r) => setTimeout(r, 5));
+    await prisma.schedule.update({ where: { id: row.id }, data: { title: 'edited locally' } });
+
+    googleCalendar.listEvents.mockResolvedValueOnce({ events: [], nextSyncToken: 'tokL2' });
+    await googleSync.syncUser('userL');
+
+    expect(googleCalendar.updateEvent).toHaveBeenCalledTimes(1);
+    expect(googleCalendar.updateEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'gL',
+      expect.objectContaining({ title: 'edited locally' })
+    );
+  });
+
+  test('an all-day Google event is stored as all-day', async () => {
+    await connect('userAD');
+    googleCalendar.listEvents.mockResolvedValueOnce({
+      events: [
+        {
+          id: 'gAD',
+          status: 'confirmed',
+          summary: 'Holiday',
+          start: { date: '2026-08-20' },
+          end: { date: '2026-08-21' },
+        },
+      ],
+      nextSyncToken: 'tokAD',
+    });
+
+    await googleSync.syncUser('userAD');
+
+    const row = await prisma.schedule.findFirst({ where: { userId: 'userAD', googleEventId: 'gAD' } });
+    expect(row.allDay).toBe(true);
+    expect(row.title).toBe('Holiday');
+  });
+
+  test('a timed Google event is not marked all-day', async () => {
+    await connect('userTD');
+    googleCalendar.listEvents.mockResolvedValueOnce({
+      events: [gEvent('gTD')],
+      nextSyncToken: 'tokTD',
+    });
+
+    await googleSync.syncUser('userTD');
+
+    const row = await prisma.schedule.findFirst({ where: { userId: 'userTD', googleEventId: 'gTD' } });
+    expect(row.allDay).toBe(false);
+  });
+
   test('deleteRemoteForSchedule deletes the linked Google event (best-effort)', async () => {
     await connect('userD');
     const schedule = { userId: 'userD', googleEventId: 'gD' };

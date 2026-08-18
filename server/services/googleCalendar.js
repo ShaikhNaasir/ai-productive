@@ -51,42 +51,87 @@ function getCalendarClient(account) {
   return google.calendar({ version: 'v3', auth });
 }
 
-// Map a local Schedule row to a Google event body.
+// Map a local Schedule row to a Google event body. An all-day schedule must go back
+// as `date`, not `dateTime` — pushing it as a timestamp would rewrite the user's
+// real all-day event into a zero-length midnight-UTC one.
 function toGoogleEvent(schedule) {
-  const start = new Date(schedule.startTime).toISOString();
-  const end = new Date(schedule.endTime || schedule.startTime).toISOString();
-  return {
+  const startDate = new Date(schedule.startTime);
+  const endDate = new Date(schedule.endTime || schedule.startTime);
+  const body = {
     summary: schedule.title,
     description: schedule.description || undefined,
     location: schedule.location || undefined,
-    start: { dateTime: start },
-    end: { dateTime: end },
   };
+
+  if (schedule.allDay) {
+    const day = (d) => d.toISOString().slice(0, 10);
+    // Google treats `end.date` as exclusive, so a single-day event ends the next day.
+    const endDay = endDate.getTime() > startDate.getTime() ? endDate : addDaysUTC(startDate, 1);
+    body.start = { date: day(startDate) };
+    body.end = { date: day(endDay) };
+  } else {
+    body.start = { dateTime: startDate.toISOString() };
+    body.end = { dateTime: endDate.toISOString() };
+  }
+  return body;
+}
+
+function addDaysUTC(date, n) {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d;
 }
 
 // Incremental event list. Uses the stored syncToken when present (only changed
 // events since last sync); otherwise a forward-looking initial sync from now.
 // A 410 (expired syncToken) is re-thrown with code 410 so the caller can reset.
-// Note: a single page (up to 250 events) per call — enough for incremental deltas.
+//
+// Google returns `nextSyncToken` ONLY on the final page of a result set; a
+// paginated response carries `nextPageToken` instead. Reading just the first page
+// would therefore leave the caller with no new sync token — it would keep the stale
+// one and replay the same page forever, so every event past the first one would
+// never sync. Page through to the end to get the token.
+const PAGE_SIZE = 250;
+const MAX_PAGES = 20; // bounded so one tick can't spin on a pathological calendar
+
 async function listEvents(account) {
   const calendar = getCalendarClient(account);
-  const params = { calendarId: account.calendarId, singleEvents: true, maxResults: 250 };
-  if (account.syncToken) params.syncToken = account.syncToken;
-  else params.timeMin = new Date().toISOString();
+  const base = { calendarId: account.calendarId, singleEvents: true, maxResults: PAGE_SIZE };
+  if (account.syncToken) base.syncToken = account.syncToken;
+  else base.timeMin = new Date().toISOString();
 
-  let res;
-  try {
-    res = await calendar.events.list(params);
-  } catch (err) {
-    const status = err.code || err.response?.status;
-    if (status === 410) {
-      const gone = new Error('Sync token expired');
-      gone.code = 410;
-      throw gone;
+  const events = [];
+  let pageToken = null;
+  let nextSyncToken = null;
+
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    let res;
+    try {
+      // A pageToken already encodes the sync/time context, so it replaces those params.
+      res = await calendar.events.list(pageToken ? { ...base, pageToken } : base);
+    } catch (err) {
+      const status = err.code || err.response?.status;
+      if (status === 410) {
+        const gone = new Error('Sync token expired');
+        gone.code = 410;
+        throw gone;
+      }
+      throw err;
     }
-    throw err;
+    events.push(...(res.data.items || []));
+    nextSyncToken = res.data.nextSyncToken || null;
+    pageToken = res.data.nextPageToken || null;
+    if (!pageToken) break;
   }
-  return { events: res.data.items || [], nextSyncToken: res.data.nextSyncToken || null };
+
+  if (pageToken) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[google-sync] stopped after ${MAX_PAGES} pages for user ${account.userId}; ` +
+        'remaining events sync on the next run'
+    );
+  }
+  return { events, nextSyncToken };
 }
 
 async function insertEvent(account, schedule) {

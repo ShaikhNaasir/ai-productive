@@ -11,7 +11,7 @@ const nextId = () => `00000000-0000-4000-8000-${String(counter++).padStart(12, '
 const modelDefaults = {
   tasks: { priority: 'MEDIUM', status: 'PENDING', recurrence: 'NONE', tags: [], description: null, dueDate: null, completedAt: null, parentId: null },
   notes: { content: '', category: null, tags: [], pinned: false },
-  schedules: { description: null, location: null, endTime: null, googleEventId: null },
+  schedules: { description: null, location: null, endTime: null, allDay: false, googleEventId: null },
   reminders: { sent: false, recurrence: 'NONE', taskId: null },
   focusSessions: { taskId: null, endedAt: null, seconds: 0, plannedSeconds: null },
   habits: { description: null },

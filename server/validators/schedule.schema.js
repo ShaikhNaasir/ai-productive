@@ -9,6 +9,7 @@ const createScheduleSchema = z
     location: z.string().max(300).optional().nullable(),
     startTime: z.coerce.date(),
     endTime: z.coerce.date().optional().nullable(),
+    allDay: z.boolean().optional(),
   })
   .refine((d) => !d.endTime || d.endTime >= d.startTime, {
     message: 'endTime must be after startTime',
@@ -22,6 +23,7 @@ const updateScheduleSchema = z
     location: z.string().max(300).optional().nullable(),
     startTime: z.coerce.date().optional(),
     endTime: z.coerce.date().optional().nullable(),
+    allDay: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'Provide at least one field to update' });
 

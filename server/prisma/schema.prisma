@@ -138,6 +138,9 @@ model Schedule {
   location    String?
   startTime   DateTime
   endTime     DateTime?
+  // All-day event (no meaningful time-of-day). Tracked so a Google all-day event
+  // round-trips as `start.date` instead of being rewritten as a midnight timestamp.
+  allDay      Boolean   @default(false)
   // Google Calendar sync (Roadmap C1.2): id of the linked Google event. Null for
   // app-only schedules; set once the schedule is pushed to / imported from Google.
   googleEventId String?
