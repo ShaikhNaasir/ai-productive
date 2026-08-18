@@ -8,6 +8,62 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **Security hardening (P1–P3).** A security review (no critical vulnerabilities
+  found — userId scoping / IDOR clean, raw SQL safe, secrets gitignored) drove
+  three slices:
+  - *P1* — per-user rate limit on `/api/ai/*` (`aiLimiter`, `AI_RATE_LIMIT_MAX`
+    default 60 / 15 min); fail-fast in production when `INTERNAL_API_KEY` is missing
+    or left at `dev-internal-key` (server + ai-service, gated on the `RENDER` env);
+    a login open-redirect guard.
+  - *P2* — parameterized the pgvector raw SQL (vector / limit bound as `$2` / `$3`,
+    table name allow-listed); password policy `min 10` / `max 128`; ai-service
+    internal-key comparison via constant-time `hmac.compare_digest`.
+  - *P3* — **JWT revocation** via `User.tokenVersion` (embedded as the `ver` claim;
+    `requireAuth` loads the user and checks the version on every request). Logout
+    bumps the version server-side; change-password bumps it and rotates the token so
+    the active session survives. Client logout now calls the server. `react-router-dom`
+    upgraded to 7.18.2 (client `npm audit` → 0 vulnerabilities).
+
+- **Bug audit remediation — 24 items.** An automated audit (`bug_remediation_plan.md`)
+  found 24 latent defects the existing suites did not cover; all are now fixed,
+  tested, and merged (PR #1):
+  - *Access control.* Task update no longer accepts `parentId` without an
+    owner-and-depth check (closing an EDIT-sharee → cross-user cascade-delete path);
+    reminder `taskId` is ownership-checked; login burns an equivalent bcrypt compare
+    on the miss path, removing a user-enumeration timing side channel.
+  - *Realtime.* The Socket.IO handshake now verifies `tokenVersion`, and live sockets
+    are disconnected on logout / password change — a revoked JWT can no longer stream.
+  - *Google Calendar.* Event sync pages through `nextPageToken` (was silently
+    dropping everything past the first 250 events); all-day events round-trip as
+    `date` instead of being rewritten to midnight-UTC (new `Schedule.allDay`); the
+    watermark is stamped after the last local write so pulled events are no longer
+    echoed back to Google.
+  - *Schedulers.* Overdue recurring reminders collapse to a single upcoming fire
+    instead of a burst; both schedulers guard against overlapping ticks (a
+    `setTimeout` chain plus a re-entrancy flag); focus `start` closes orphaned open
+    sessions; the server drains cleanly on `SIGTERM` / `SIGINT`.
+  - *Cost & performance.* Extracted document text is capped before it reaches the
+    LLM; analytics / AI-usage / focus-stats reads are windowed and column-projected
+    (no longer dragging the 1024-dim `embedding`); the AI client caps total
+    wall-clock across retries. Three composite indexes added for the hot
+    scheduler / usage queries.
+  - *Client.* The Pomodoro timer counts wall-clock time (surviving background-tab
+    throttling); a 401 now clears auth state and redirects to login; the service
+    worker cache name is build-stamped so stale assets evict.
+  - *Search & misc.* Keyword search interleaves tasks and notes (was starving
+    tasks); semantic relevance score is floored at 0; habit check-in is an
+    idempotent `upsert`; the ai-service internal-key header handles non-ASCII bytes
+    (clean 401, not 500).
+  - Dev-toolchain advisories cleared by upgrading to Vite 8 / Vitest 4
+    (client `npm audit` → 0 vulnerabilities).
+
+  Suites after remediation: server Jest **187**, client Vitest **40**, ai-service
+  pytest **35**; lint clean; both packages report 0 npm vulnerabilities. New schema
+  applied via `prisma db push` on deploy: `Schedule.allDay` plus three composite
+  indexes.
+
 ### Added
 
 - **Focus timer robustness.** The Pomodoro timer now supports **pause/resume**

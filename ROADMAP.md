@@ -8,7 +8,7 @@ and approved.
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done.
 
-## Current status (resume here) — updated 2026-08-13
+## Current status (resume here) — updated 2026-08-18
 
 **Shipped & pushed to `main`** (latest deploy commit `31c5416`): all of **Tier A
 (A1–A4)**, **Tier B (B1–B4)**, **C2**, **C3**, plus **multi-provider LLM**
@@ -21,10 +21,19 @@ storage, C1.2 two-way event sync, C1.3 client UI). It needs an OAuth 2.0 Client
 the integration stays disabled and core CRUD is unaffected. **Nothing else is
 pending in the backlog.**
 
+**Post-launch hardening (2026-08-18):** a security review (P1–P3) and an automated
+24-item bug audit (`bug_remediation_plan.md`) have both shipped to `main` (PR #1).
+The audit closed latent defects across access control, realtime auth, Google
+Calendar sync, schedulers, cost/performance, and the client — see `CHANGELOG.md`
+for the full list. Suites after remediation: server Jest 187, client Vitest 40,
+ai-service pytest 35; lint clean; both packages 0 npm vulnerabilities.
+
 **Deploy / ops notes:**
 - Render applies schema via `prisma db push` (`render.yaml`), so all deferred
   `[~]` migrations (Task.parentId, focus_sessions, habits/habit_logs,
-  task_shares, ai_usage) apply automatically on deploy — no migration files.
+  task_shares, ai_usage, `Schedule.allDay`, and the three new composite indexes on
+  Reminder / AiUsage / FocusSession) apply automatically on deploy — no migration
+  files.
 - Render env (productivity-ai): set **any one** of `ANTHROPIC_API_KEY` /
   `OPENAI_API_KEY` / `GEMINI_API_KEY`; optional `LLM_PROVIDER` (default `auto`).
   These are `sync: false` placeholders in `render.yaml` — add real values in the
