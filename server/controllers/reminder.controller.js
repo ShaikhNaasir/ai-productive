@@ -27,8 +27,17 @@ async function getOne(req, res) {
   res.json({ reminder: await getOwned(req.user.id, req.params.id) });
 }
 
+// A reminder may reference a task, but only one the caller owns. Reminder.taskId has
+// no FK, so nothing else stops a client attaching a reminder to a stranger's task.
+async function assertOwnedTask(userId, taskId) {
+  if (!taskId) return;
+  const task = await prisma.task.findFirst({ where: { id: taskId, userId } });
+  if (!task) throw ApiError.notFound('Task not found');
+}
+
 async function create(req, res) {
   const data = createReminderSchema.parse(req.body);
+  await assertOwnedTask(req.user.id, data.taskId);
   const reminder = await prisma.reminder.create({ data: { ...data, userId: req.user.id } });
   res.status(201).json({ reminder });
 }
@@ -36,6 +45,7 @@ async function create(req, res) {
 async function update(req, res) {
   const data = updateReminderSchema.parse(req.body);
   await getOwned(req.user.id, req.params.id);
+  await assertOwnedTask(req.user.id, data.taskId);
   const reminder = await prisma.reminder.update({ where: { id: req.params.id }, data });
   res.json({ reminder });
 }

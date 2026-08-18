@@ -23,6 +23,11 @@ export default function PomodoroTimer() {
   const sessionIdRef = useRef(null);
   const plannedRef = useRef(25 * 60);
   const elapsedRef = useRef(0); // active seconds, excludes paused time
+  // Elapsed is derived from wall clock, not from counting interval callbacks:
+  // browsers throttle background-tab timers to roughly once a minute, so tick
+  // counting under-records a real 25-minute session as a handful of seconds.
+  const runStartRef = useRef(0); // Date.now() when the current run segment began
+  const bankedRef = useRef(0); // active seconds banked from previous segments
 
   const clearTick = () => {
     if (intervalRef.current) {
@@ -41,12 +46,18 @@ export default function PomodoroTimer() {
   }, []);
 
   const stop = useCallback(async () => {
+    // Read the clock before clearing the tick, so the final partial second counts
+    // and a throttled tab doesn't report a stale value.
+    const consumed = intervalRef.current
+      ? bankedRef.current + Math.round((Date.now() - runStartRef.current) / 1000)
+      : elapsedRef.current;
     clearTick();
     setRunning(false);
     setPaused(false);
     const id = sessionIdRef.current;
     sessionIdRef.current = null;
-    const consumed = elapsedRef.current;
+    elapsedRef.current = 0;
+    bankedRef.current = 0;
     setSecondsLeft(plannedRef.current);
     if (id) {
       try {
@@ -58,12 +69,15 @@ export default function PomodoroTimer() {
     }
   }, [loadToday]);
 
-  // Tick once per second while running (and not paused): advance active elapsed,
-  // update the countdown, and auto-stop when the planned time is reached.
+  // Tick once per second while running (and not paused). The interval only drives
+  // the repaint; elapsed time comes from the clock, so a throttled or missed tick
+  // costs display smoothness rather than tracked time.
   const beginInterval = useCallback(() => {
     clearTick();
+    runStartRef.current = Date.now();
     intervalRef.current = setInterval(() => {
-      elapsedRef.current += 1;
+      const live = Math.round((Date.now() - runStartRef.current) / 1000);
+      elapsedRef.current = bankedRef.current + live;
       const left = plannedRef.current - elapsedRef.current;
       setSecondsLeft(left > 0 ? left : 0);
       if (left <= 0) stop();
@@ -87,6 +101,8 @@ export default function PomodoroTimer() {
         sessionIdRef.current = session.id;
         plannedRef.current = planned;
         elapsedRef.current = Math.min(elapsed, planned);
+        // Time already served becomes the bank; beginInterval restarts the clock.
+        bankedRef.current = elapsedRef.current;
         setTaskId(session.taskId || '');
         if (session.plannedSeconds) setMinutes(clampMinutes(session.plannedSeconds / 60));
         const left = planned - elapsedRef.current;
@@ -114,6 +130,7 @@ export default function PomodoroTimer() {
       sessionIdRef.current = session.id;
       plannedRef.current = session.plannedSeconds || planned;
       elapsedRef.current = 0;
+      bankedRef.current = 0;
       setSecondsLeft(plannedRef.current);
       setRunning(true);
       setPaused(false);
@@ -124,6 +141,9 @@ export default function PomodoroTimer() {
   };
 
   const pause = () => {
+    // Bank the segment just completed; the clock restarts on resume.
+    bankedRef.current += Math.round((Date.now() - runStartRef.current) / 1000);
+    elapsedRef.current = bankedRef.current;
     clearTick();
     setPaused(true);
   };

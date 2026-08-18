@@ -13,7 +13,7 @@ jest.mock('../realtime', () => ({
 
 const prisma = require('../models/prisma');
 const { emitToUser } = require('../realtime');
-const { tick } = require('../services/reminderScheduler');
+const { tick, guardedTick, nextFutureOccurrence } = require('../services/reminderScheduler');
 
 describe('reminder scheduler', () => {
   test('emits due reminders and marks them sent', async () => {
@@ -69,5 +69,67 @@ describe('reminder scheduler', () => {
     const all = await prisma.reminder.findMany({ where: { userId: 'u3', message: 'one-shot' } });
     expect(all.length).toBe(1);
     expect(all[0].sent).toBe(true);
+  });
+
+  test('an overdue recurring reminder fires once and chains a single future occurrence', async () => {
+    // Five days of downtime: chaining straight from remindAt would land in the past
+    // and re-fire on every subsequent tick until it caught up.
+    const fiveDaysAgo = new Date(Date.now() - 5 * 86400000);
+    await prisma.reminder.create({
+      data: { userId: 'u4', message: 'backlog', remindAt: fiveDaysAgo, recurrence: 'DAILY' },
+    });
+
+    await tick();
+    expect(emitToUser).toHaveBeenCalledTimes(1);
+
+    const all = await prisma.reminder.findMany({ where: { userId: 'u4', message: 'backlog' } });
+    expect(all.length).toBe(2);
+    const chained = all.find((r) => !r.sent);
+    expect(new Date(chained.remindAt).getTime()).toBeGreaterThan(Date.now());
+
+    // A second tick finds nothing due, so no duplicate burst.
+    await tick();
+    expect(emitToUser).toHaveBeenCalledTimes(1);
+    const after = await prisma.reminder.findMany({ where: { userId: 'u4', message: 'backlog' } });
+    expect(after.length).toBe(2);
+  });
+
+  test('nextFutureOccurrence advances past now and preserves time-of-day', () => {
+    const now = new Date('2026-08-17T12:00:00Z');
+    const base = new Date('2026-08-10T09:30:00Z');
+    const next = nextFutureOccurrence(base, 'DAILY', now);
+    expect(next.toISOString()).toBe('2026-08-18T09:30:00.000Z');
+  });
+
+  test('nextFutureOccurrence returns null for a non-recurring reminder', () => {
+    expect(nextFutureOccurrence(new Date(), 'NONE', new Date())).toBeNull();
+  });
+
+  test('guardedTick skips a run while the previous one is still in flight', async () => {
+    const past = new Date(Date.now() - 60000);
+    await prisma.reminder.create({ data: { userId: 'u5', message: 'overlap', remindAt: past } });
+
+    // Stall the first tick mid-query so the second one overlaps it.
+    const original = prisma.reminder.findMany;
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    let calls = 0;
+    prisma.reminder.findMany = async (args) => {
+      calls += 1;
+      if (calls === 1) await gate;
+      return original(args);
+    };
+
+    const first = guardedTick();
+    const second = guardedTick(); // must return immediately without querying
+    await second;
+    expect(calls).toBe(1);
+
+    release();
+    await first;
+    prisma.reminder.findMany = original;
+
+    // Exactly one emit despite two overlapping invocations.
+    expect(emitToUser).toHaveBeenCalledTimes(1);
   });
 });

@@ -7,6 +7,10 @@ const { extractText } = require('../services/textExtract');
 
 // Cap stored note content so a large document can't bloat a row unreasonably.
 const MAX_STORED_CHARS = 100000;
+// Cap what is handed to the LLM independently of what is stored. A 2MB PDF can
+// extract to well over a million characters — far past most context windows, and a
+// single call costing orders of magnitude more than intended.
+const MAX_SUMMARY_CHARS = 40000;
 
 function titleFromFilename(name) {
   const base = (name || 'Untitled document').replace(/\.[^.]+$/, '').trim();
@@ -20,12 +24,13 @@ async function uploadAndSummarize(req, res) {
   if (!req.file) throw ApiError.badRequest('No file uploaded');
 
   const text = await extractText(req.file.buffer, req.file.mimetype);
+  const stored = text.slice(0, MAX_STORED_CHARS);
 
   const note = await prisma.note.create({
     data: {
       userId: req.user.id,
       title: titleFromFilename(req.file.originalname),
-      content: text.slice(0, MAX_STORED_CHARS),
+      content: stored,
       tags: ['document'],
     },
   });
@@ -33,7 +38,7 @@ async function uploadAndSummarize(req, res) {
   let summary = '';
   let keyPoints = [];
   try {
-    const result = await aiClient.summarize(text);
+    const result = await aiClient.summarize(stored.slice(0, MAX_SUMMARY_CHARS));
     summary = result.summary || '';
     keyPoints = result.key_points || [];
   } catch (err) {

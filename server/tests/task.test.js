@@ -186,6 +186,75 @@ describe('tasks', () => {
     expect(gone.status).toBe(404);
   });
 
+  test('update rejects a parentId owned by another user', async () => {
+    const mine = await request(app).post('/api/tasks').set(auth()).send({ title: 'reparent me' });
+
+    const stranger = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'reparent-stranger@b.com', password: 'password123' });
+    const strangerAuth = { Authorization: `Bearer ${stranger.body.token}` };
+    const theirs = await request(app).post('/api/tasks').set(strangerAuth).send({ title: 'not yours' });
+
+    const res = await request(app)
+      .patch(`/api/tasks/${mine.body.task.id}`)
+      .set(auth())
+      .send({ parentId: theirs.body.task.id });
+    expect(res.status).toBe(404);
+  });
+
+  test('update rejects a task becoming its own parent', async () => {
+    const created = await request(app).post('/api/tasks').set(auth()).send({ title: 'self parent' });
+    const id = created.body.task.id;
+    const res = await request(app).patch(`/api/tasks/${id}`).set(auth()).send({ parentId: id });
+    expect(res.status).toBe(400);
+  });
+
+  test('update rejects nesting under an existing subtask', async () => {
+    const parent = await request(app).post('/api/tasks').set(auth()).send({ title: 'depth parent' });
+    const sub = await request(app)
+      .post('/api/tasks')
+      .set(auth())
+      .send({ title: 'depth child', parentId: parent.body.task.id });
+    const loose = await request(app).post('/api/tasks').set(auth()).send({ title: 'loose' });
+
+    const res = await request(app)
+      .patch(`/api/tasks/${loose.body.task.id}`)
+      .set(auth())
+      .send({ parentId: sub.body.task.id });
+    expect(res.status).toBe(400);
+  });
+
+  test('update rejects nesting a task that has subtasks of its own', async () => {
+    const outer = await request(app).post('/api/tasks').set(auth()).send({ title: 'has kids' });
+    await request(app).post('/api/tasks').set(auth()).send({ title: 'a kid', parentId: outer.body.task.id });
+    const target = await request(app).post('/api/tasks').set(auth()).send({ title: 'new parent' });
+
+    const res = await request(app)
+      .patch(`/api/tasks/${outer.body.task.id}`)
+      .set(auth())
+      .send({ parentId: target.body.task.id });
+    expect(res.status).toBe(400);
+  });
+
+  test('the owner can still re-parent and un-parent their own task', async () => {
+    const parent = await request(app).post('/api/tasks').set(auth()).send({ title: 'legit parent' });
+    const child = await request(app).post('/api/tasks').set(auth()).send({ title: 'legit child' });
+
+    const nested = await request(app)
+      .patch(`/api/tasks/${child.body.task.id}`)
+      .set(auth())
+      .send({ parentId: parent.body.task.id });
+    expect(nested.status).toBe(200);
+    expect(nested.body.task.parentId).toBe(parent.body.task.id);
+
+    const freed = await request(app)
+      .patch(`/api/tasks/${child.body.task.id}`)
+      .set(auth())
+      .send({ parentId: null });
+    expect(freed.status).toBe(200);
+    expect(freed.body.task.parentId).toBeNull();
+  });
+
   test('recurring task spawned via PATCH status=COMPLETED', async () => {
     const created = await request(app)
       .post('/api/tasks')

@@ -49,4 +49,30 @@ describe('aiClient retry + graceful degradation', () => {
     await expect(aiClient.chat('hi', {}, [])).rejects.toMatchObject({ statusCode: 500 });
     expect(mockPost).toHaveBeenCalledTimes(1); // no retry
   });
+
+  test('each attempt carries a timeout so one call cannot run unbounded', async () => {
+    mockPost.mockResolvedValueOnce({ data: { reply: 'ok' }, headers: {} });
+
+    await aiClient.chat('hi', {}, []);
+
+    const [, , opts] = mockPost.mock.calls[0];
+    expect(opts.timeout).toBeGreaterThan(0);
+    // Never longer than the total budget for the whole call.
+    expect(opts.timeout).toBeLessThanOrEqual(75000);
+  });
+
+  test('the retry is skipped when it would exceed the total budget', async () => {
+    jest.resetModules();
+    process.env.AI_TOTAL_BUDGET_MS = '10';
+    process.env.AI_RETRY_DELAY_MS = '50'; // sleeping would blow the 10ms budget
+    const fresh = require('../services/aiClient');
+    mockPost.mockRejectedValue({ response: { status: 503, data: { detail: 'down' } } });
+
+    await expect(fresh.chat('hi', {}, [])).rejects.toMatchObject({ statusCode: 503 });
+    expect(mockPost).toHaveBeenCalledTimes(1); // no retry — the budget forbade it
+
+    delete process.env.AI_TOTAL_BUDGET_MS;
+    process.env.AI_RETRY_DELAY_MS = '0';
+    jest.resetModules();
+  });
 });

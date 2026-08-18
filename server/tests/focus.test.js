@@ -130,6 +130,29 @@ describe('focus sessions', () => {
     expect(res.body.session.seconds).toBeGreaterThanOrEqual(59);
   });
 
+  test('starting a session closes one left open by another tab', async () => {
+    const startedAt = new Date(Date.now() - 90 * 1000).toISOString();
+    const orphan = await request(app).post('/api/focus/start').set(auth()).send({ startedAt });
+    const orphanId = orphan.body.session.id;
+
+    // A second tab starts its own session without stopping the first.
+    await request(app).post('/api/focus/start').set(auth()).send({});
+
+    // The abandoned session is closed with its wall-clock time, not stranded at 0.
+    const active = await request(app).get('/api/focus/active').set(auth());
+    expect(active.body.session.id).not.toBe(orphanId);
+
+    const stats = await request(app).get('/api/focus/stats').set(auth());
+    expect(stats.status).toBe(200);
+
+    const stopped = await request(app)
+      .post(`/api/focus/${orphanId}/stop`)
+      .set(auth())
+      .send({});
+    // Already closed; stopping again must not resurrect or double-count it.
+    expect(stopped.status).toBe(200);
+  });
+
   test('stats aggregate per task and per day', async () => {
     const task = await request(app).post('/api/tasks').set(auth()).send({ title: 'deep work' });
     const taskId = task.body.task.id;

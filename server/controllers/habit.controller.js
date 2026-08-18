@@ -71,14 +71,17 @@ async function remove(req, res) {
   res.status(204).send();
 }
 
-// Idempotent: checking in twice on the same day is a no-op.
+// Idempotent: checking in twice on the same day is a no-op. Upsert rather than
+// find-then-create — the latter races against the [habitId, date] unique constraint,
+// so a double-tap or a retried request surfaced a P2002 as a 500.
 async function checkIn(req, res) {
   const habit = await getOwnedHabit(req.user.id, req.params.id);
   const date = utcDay();
-  const existing = await prisma.habitLog.findFirst({ where: { habitId: habit.id, date } });
-  if (!existing) {
-    await prisma.habitLog.create({ data: { habitId: habit.id, userId: req.user.id, date } });
-  }
+  await prisma.habitLog.upsert({
+    where: { habitId_date: { habitId: habit.id, date } },
+    update: {},
+    create: { habitId: habit.id, userId: req.user.id, date },
+  });
   const logs = await prisma.habitLog.findMany({ where: { habitId: habit.id, userId: req.user.id } });
   res.json({ habit: decorate(habit, logs, dayKey(new Date())) });
 }

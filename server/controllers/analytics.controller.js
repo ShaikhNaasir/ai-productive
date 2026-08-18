@@ -6,12 +6,33 @@ function dayKey(d) {
   return new Date(d).toISOString().slice(0, 10);
 }
 
+// Start of the UTC day `days` ago — the lower bound for the rolling windows below.
+function windowStart(days) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+// Only the columns each aggregate actually reads. Notably never `embedding`, which
+// is a 1024-dimension vector (~4KB/row) that a bare findMany would drag along.
+const TASK_FIELDS = { status: true, dueDate: true, completedAt: true, tags: true };
+
 async function summary(req, res) {
+  // Focus and habit tiles are "today" only, so a short window is enough; task counts
+  // are all-time by definition and stay unbounded, but are now narrowly projected.
+  const since = windowStart(1);
   const [tasks, sessions, habits, habitLogs] = await Promise.all([
-    prisma.task.findMany({ where: { userId: req.user.id } }),
-    prisma.focusSession.findMany({ where: { userId: req.user.id } }),
-    prisma.habit.findMany({ where: { userId: req.user.id } }),
-    prisma.habitLog.findMany({ where: { userId: req.user.id } }),
+    prisma.task.findMany({ where: { userId: req.user.id }, select: TASK_FIELDS }),
+    prisma.focusSession.findMany({
+      where: { userId: req.user.id, startedAt: { gte: since } },
+      select: { startedAt: true, seconds: true },
+    }),
+    prisma.habit.findMany({ where: { userId: req.user.id }, select: { id: true } }),
+    prisma.habitLog.findMany({
+      where: { userId: req.user.id, date: { gte: since } },
+      select: { habitId: true, date: true },
+    }),
   ]);
   const now = new Date();
 
@@ -47,7 +68,12 @@ async function summary(req, res) {
 }
 
 async function trends(req, res) {
-  const tasks = await prisma.task.findMany({ where: { userId: req.user.id } });
+  // categoryWorkload and byStatus are all-time over every task, so this read stays
+  // unbounded — but projected to the four columns actually used.
+  const tasks = await prisma.task.findMany({
+    where: { userId: req.user.id },
+    select: TASK_FIELDS,
+  });
 
   // Completed per day for the last 7 days.
   const days = [];

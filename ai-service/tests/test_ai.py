@@ -56,6 +56,22 @@ def test_requires_internal_key():
     assert res.status_code == 401
 
 
+def test_wrong_internal_key_is_401():
+    res = client.post("/summarize", json={"text": "hello"}, headers={"X-Internal-Key": "nope"})
+    assert res.status_code == 401
+
+
+def test_non_ascii_internal_key_is_401_not_500():
+    # Header bytes are decoded latin-1 by Starlette, so a non-ASCII byte reaches the
+    # dependency as a non-ASCII str. hmac.compare_digest raises TypeError on those,
+    # which surfaced as an unhandled 500 rather than a clean auth failure. Sent as
+    # raw bytes because httpx refuses to encode a non-ASCII str header itself.
+    res = client.post(
+        "/summarize", json={"text": "hello"}, headers={"X-Internal-Key": b"caf\xe9"}
+    )
+    assert res.status_code == 401
+
+
 def test_summarize_unavailable_without_llm():
     # No ANTHROPIC_API_KEY configured -> graceful 503
     res = client.post("/summarize", json={"text": "hello"}, headers=KEY)

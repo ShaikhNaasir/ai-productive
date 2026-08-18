@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { getToken, setToken } from '@/lib/api';
+import { getToken, setToken, SESSION_EXPIRED_EVENT } from '@/lib/api';
 import { authService } from '@/services/authService';
 
 const AuthContext = createContext(null);
@@ -28,6 +28,15 @@ export function AuthProvider({ children }) {
     return () => {
       active = false;
     };
+  }, []);
+
+  // A 401 anywhere in the app means the token was revoked or expired server-side.
+  // Drop the user so ProtectedRoute redirects to login instead of leaving the
+  // authenticated shell up with every request failing.
+  useEffect(() => {
+    const onExpired = () => setUser(null);
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   const login = useCallback(async (credentials) => {

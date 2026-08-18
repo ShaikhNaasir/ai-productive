@@ -4,7 +4,8 @@ const prisma = require('../models/prisma');
 const googleCalendar = require('./googleCalendar');
 
 // Map a Google event to local Schedule fields. Handles both timed events
-// (start.dateTime) and all-day events (start.date).
+// (start.dateTime) and all-day events (start.date). `allDay` is recorded so the
+// push direction can send the event back in the shape it arrived in.
 function fromGoogleEvent(ev) {
   const start = ev.start && (ev.start.dateTime || ev.start.date);
   const end = ev.end && (ev.end.dateTime || ev.end.date);
@@ -12,6 +13,7 @@ function fromGoogleEvent(ev) {
     title: ev.summary || '(no title)',
     description: ev.description || null,
     location: ev.location || null,
+    allDay: Boolean(ev.start && !ev.start.dateTime && ev.start.date),
     startTime: start ? new Date(start) : null,
     endTime: end ? new Date(end) : null,
   };
@@ -68,8 +70,6 @@ async function syncUser(userId) {
   const account = await prisma.googleAccount.findUnique({ where: { userId } });
   if (!account) return { skipped: true };
 
-  const syncStart = new Date();
-
   // Snapshot linked schedules edited locally since the last sync BEFORE pulling,
   // so events the pull just overwrote are excluded from the push (Google wins).
   const locallyChanged = account.lastSyncedAt
@@ -96,6 +96,14 @@ async function syncUser(userId) {
     }
   }
 
+  // Watermark AFTER this run's own local writes (the pull's upserts in step 1 and the
+  // googleEventId stamps in step 2), which all bump `updatedAt`. A watermark taken
+  // before them would make every row the sync just touched look "locally edited" on
+  // the next run, echoing it straight back to Google — burning quota and overwriting
+  // any remote edit made in between, inverting the Google-wins policy.
+  // Step 3 below performs no local writes, so this is the last such moment.
+  const localWritesCompletedAt = new Date();
+
   // 3. Push local edits of already-linked schedules -> Google, except events a
   //    remote change just won during the pull.
   for (const s of locallyChanged) {
@@ -109,7 +117,7 @@ async function syncUser(userId) {
   // 4. Persist incremental sync state.
   await prisma.googleAccount.update({
     where: { id: account.id },
-    data: { syncToken: nextSyncToken || account.syncToken, lastSyncedAt: syncStart },
+    data: { syncToken: nextSyncToken || account.syncToken, lastSyncedAt: localWritesCompletedAt },
   });
 
   return { pulled: pulledIds.size, pushed: unsynced.length };

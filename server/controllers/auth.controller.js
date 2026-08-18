@@ -3,6 +3,7 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../models/prisma');
 const { signToken, verifyToken } = require('../utils/jwt');
+const { disconnectUser } = require('../realtime');
 const ApiError = require('../utils/ApiError');
 const {
   registerSchema,
@@ -12,6 +13,11 @@ const {
 } = require('../validators/auth.schema');
 
 const SALT_ROUNDS = 10;
+
+// A real hash to compare against when the email is unknown, so a miss costs the same
+// bcrypt work as a wrong password. Without it, response timing leaks which addresses
+// are registered. Computed once at load.
+const DUMMY_HASH = bcrypt.hashSync('unused-placeholder-password', SALT_ROUNDS);
 
 function serializeUser(user) {
   return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
@@ -42,6 +48,8 @@ async function login(req, res) {
 
   const user = await prisma.user.findUnique({ where: { email: data.email } });
   if (!user) {
+    // Burn an equivalent compare so an unknown email is not measurably faster.
+    await bcrypt.compare(data.password, DUMMY_HASH);
     throw ApiError.unauthorized('Invalid email or password');
   }
 
@@ -68,6 +76,8 @@ async function logout(req, res) {
           where: { id: user.id },
           data: { tokenVersion: (user.tokenVersion ?? 0) + 1 },
         });
+        // Revocation only gates new connections; drop the live ones too.
+        disconnectUser(user.id);
       }
     } catch {
       // Invalid/expired token — nothing to revoke.
@@ -122,6 +132,8 @@ async function changePassword(req, res) {
     where: { id: user.id },
     data: { passwordHash, tokenVersion },
   });
+  // Sockets opened with a now-revoked token must not survive the password change.
+  disconnectUser(user.id);
 
   res.json({ success: true, token: issueToken(updated) });
 }

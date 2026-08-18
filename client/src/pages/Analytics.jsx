@@ -126,7 +126,14 @@ export default function Analytics() {
       {usage && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">AI usage &amp; cost</CardTitle>
+            <CardTitle className="text-base">
+              AI usage &amp; cost
+              {usage.windowDays ? (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  last {usage.windowDays} days
+                </span>
+              ) : null}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

@@ -4,12 +4,14 @@
 // Supports: findUnique, findFirst, findMany (where + orderBy), create, update, delete, count.
 
 let counter = 1;
-const nextId = () => String(counter++);
+// UUID-shaped (v4 layout) so the `.uuid()` validators on request bodies behave the
+// same against fake ids as they do against Prisma's real `@default(uuid())` values.
+const nextId = () => `00000000-0000-4000-8000-${String(counter++).padStart(12, '0')}`;
 
 const modelDefaults = {
   tasks: { priority: 'MEDIUM', status: 'PENDING', recurrence: 'NONE', tags: [], description: null, dueDate: null, completedAt: null, parentId: null },
   notes: { content: '', category: null, tags: [], pinned: false },
-  schedules: { description: null, location: null, endTime: null, googleEventId: null },
+  schedules: { description: null, location: null, endTime: null, allDay: false, googleEventId: null },
   reminders: { sent: false, recurrence: 'NONE', taskId: null },
   focusSessions: { taskId: null, endedAt: null, seconds: 0, plannedSeconds: null },
   habits: { description: null },
@@ -110,6 +112,16 @@ function applyInclude(records, include, allRows) {
   });
 }
 
+// Project a row down to the requested fields, so a controller that reads a column it
+// did not select fails here the same way it would against a real projected query.
+function applySelect(records, select) {
+  if (!select) return records;
+  const fields = Object.entries(select)
+    .filter(([, on]) => on)
+    .map(([field]) => field);
+  return records.map((r) => Object.fromEntries(fields.map((f) => [f, r[f]])));
+}
+
 function makeModel(name) {
   const rows = [];
   const defaults = modelDefaults[name] || {};
@@ -119,16 +131,18 @@ function makeModel(name) {
       const [field, val] = Object.entries(where)[0];
       return rows.find((r) => r[field] === val) || null;
     },
-    findFirst: async ({ where, orderBy, include } = {}) => {
+    findFirst: async ({ where, orderBy, include, select } = {}) => {
       const filtered = rows.filter((r) => matchWhere(r, where));
       const found = applyOrderBy(filtered, orderBy)[0] || null;
       if (!found) return null;
-      return include ? applyInclude([found], include, rows)[0] : found;
+      if (include) return applyInclude([found], include, rows)[0];
+      return applySelect([found], select)[0];
     },
-    findMany: async ({ where, orderBy, include } = {}) => {
+    findMany: async ({ where, orderBy, include, select, take } = {}) => {
       const filtered = rows.filter((r) => matchWhere(r, where));
-      const ordered = applyOrderBy(filtered, orderBy);
-      return applyInclude(ordered, include, rows);
+      let ordered = applyOrderBy(filtered, orderBy);
+      if (take != null) ordered = ordered.slice(0, take);
+      return include ? applyInclude(ordered, include, rows) : applySelect(ordered, select);
     },
     count: async ({ where } = {}) => rows.filter((r) => matchWhere(r, where)).length,
     create: async ({ data }) => {
@@ -166,6 +180,32 @@ function makeModel(name) {
         if (rows[i].parentId === removed.id) rows.splice(i, 1);
       }
       return removed;
+    },
+    // Compound-unique `where` keys arrive as { field_field: { field, field } };
+    // flatten them so the same matcher handles both forms.
+    upsert: async ({ where, create, update }) => {
+      const flat = {};
+      for (const [key, val] of Object.entries(where)) {
+        if (val && typeof val === 'object' && !(val instanceof Date) && key.includes('_')) {
+          Object.assign(flat, val);
+        } else {
+          flat[key] = val;
+        }
+      }
+      const existing = rows.find((r) => matchWhere(r, flat));
+      if (existing) {
+        Object.assign(existing, update, { updatedAt: new Date() });
+        return existing;
+      }
+      const now = new Date();
+      const row = { id: nextId(), createdAt: now, updatedAt: now, ...defaults, ...create };
+      rows.push(row);
+      return row;
+    },
+    updateMany: async ({ where, data } = {}) => {
+      const matched = rows.filter((r) => matchWhere(r, where));
+      matched.forEach((r) => Object.assign(r, data, { updatedAt: new Date() }));
+      return { count: matched.length };
     },
     deleteMany: async ({ where } = {}) => {
       const toRemove = rows.filter((r) => matchWhere(r, where));

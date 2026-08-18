@@ -12,6 +12,11 @@ const { costUsd } = require('../utils/aiCost');
 const TIMEOUT_MS = parseInt(process.env.AI_TIMEOUT_MS || '60000', 10);
 const RETRY_DELAY_MS = parseInt(process.env.AI_RETRY_DELAY_MS || '1500', 10);
 const MAX_RETRIES = 1;
+// Ceiling on the TOTAL wall clock across attempts. Without it a hung AI service
+// pins an Express worker and the browser connection for timeout + delay + timeout
+// (~121.5s by default) — past most proxy idle timeouts, so the caller sees a proxy
+// error instead of the graceful 503 the client knows how to explain.
+const TOTAL_BUDGET_MS = parseInt(process.env.AI_TOTAL_BUDGET_MS || '75000', 10);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -58,20 +63,30 @@ function recordUsage(path, headers) {
 // Translates transport/AI errors into a clean 503 so the app degrades gracefully.
 // Retries once on a retryable failure (cold start / transient) before giving up.
 async function call(path, body) {
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
   let lastErr;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
     try {
-      const res = await client.post(path, body);
+      // Never let one attempt run past the overall budget.
+      const res = await client.post(path, body, { timeout: Math.min(TIMEOUT_MS, remaining) });
       recordUsage(path, res.headers);
       return res.data;
     } catch (err) {
       lastErr = err;
-      if (attempt < MAX_RETRIES && isRetryable(err)) {
+      const canRetry =
+        attempt < MAX_RETRIES && isRetryable(err) && Date.now() + RETRY_DELAY_MS < deadline;
+      if (canRetry) {
         await sleep(RETRY_DELAY_MS);
         continue;
       }
       break;
     }
+  }
+  if (!lastErr) {
+    // Budget exhausted before any attempt could run.
+    throw new ApiError(503, 'AI service is unavailable. Please try again later.');
   }
 
   if (lastErr.response) {

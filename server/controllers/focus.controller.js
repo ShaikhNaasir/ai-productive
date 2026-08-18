@@ -14,6 +14,32 @@ async function getOwnedSession(userId, id) {
   return session;
 }
 
+// Elapsed seconds for a session being closed at `endedAt`: the wall-clock span,
+// optionally shortened by a client-reported active time, and capped by the planned
+// duration so an orphaned session recovered much later can't inflate tracked time.
+function elapsedSeconds(session, endedAt, clientSeconds) {
+  const wallClock = Math.max(
+    0,
+    Math.round((endedAt.getTime() - new Date(session.startedAt).getTime()) / 1000)
+  );
+  let seconds = clientSeconds != null ? Math.min(clientSeconds, wallClock) : wallClock;
+  if (session.plannedSeconds != null) seconds = Math.min(seconds, session.plannedSeconds);
+  return seconds;
+}
+
+// Close any session left open by another tab or a crashed client. Without this,
+// `active()` only ever surfaces the newest open row and the rest are stranded at
+// endedAt: null / seconds: 0 forever.
+async function closeDanglingSessions(userId, endedAt) {
+  const open = await prisma.focusSession.findMany({ where: { userId, endedAt: null } });
+  for (const session of open) {
+    await prisma.focusSession.update({
+      where: { id: session.id },
+      data: { endedAt, seconds: elapsedSeconds(session, endedAt, null) },
+    });
+  }
+}
+
 // Open a focus session. An optional taskId binds it to a task (ownership checked);
 // an optional startedAt records when the timer actually began.
 async function start(req, res) {
@@ -23,6 +49,7 @@ async function start(req, res) {
     if (!task) throw ApiError.notFound('Task not found');
   }
   const now = new Date();
+  await closeDanglingSessions(req.user.id, now);
   // Tolerate client clock skew: a startedAt in the future is clamped to now so the
   // session never records negative/inflated time and start never 400s on skew.
   let started = startedAt || now;
@@ -56,9 +83,7 @@ async function stop(req, res) {
   const { seconds: clientSeconds } = stopFocusSchema.parse(req.body || {});
   const prior = await getOwnedSession(req.user.id, req.params.id);
   const endedAt = new Date();
-  const wallClock = Math.max(0, Math.round((endedAt.getTime() - new Date(prior.startedAt).getTime()) / 1000));
-  let seconds = clientSeconds != null ? Math.min(clientSeconds, wallClock) : wallClock;
-  if (prior.plannedSeconds != null) seconds = Math.min(seconds, prior.plannedSeconds);
+  const seconds = elapsedSeconds(prior, endedAt, clientSeconds);
   const session = await prisma.focusSession.update({
     where: { id: prior.id },
     data: { endedAt, seconds },
@@ -67,8 +92,17 @@ async function stop(req, res) {
 }
 
 // Aggregate tracked time per task and per day (last 7 days), plus the total.
+// `total` and `perTask` cover the same 7-day window as `perDay` — reading every
+// session ever recorded to render a one-week chart does not scale.
 async function stats(req, res) {
-  const sessions = await prisma.focusSession.findMany({ where: { userId: req.user.id } });
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - 6);
+  since.setUTCHours(0, 0, 0, 0);
+
+  const sessions = await prisma.focusSession.findMany({
+    where: { userId: req.user.id, startedAt: { gte: since } },
+    select: { startedAt: true, seconds: true, taskId: true },
+  });
 
   const days = [];
   const today = new Date();
@@ -89,11 +123,12 @@ async function stats(req, res) {
   }
 
   const perDay = days.map((d) => ({ date: d, seconds: secondsByDay[d] }));
+  const windowDays = days.length;
   const perTask = Object.entries(secondsByTask)
     .map(([taskId, seconds]) => ({ taskId, seconds }))
     .sort((a, b) => b.seconds - a.seconds);
 
-  res.json({ total, perDay, perTask });
+  res.json({ total, windowDays, perDay, perTask });
 }
 
 module.exports = { start, stop, active, stats };

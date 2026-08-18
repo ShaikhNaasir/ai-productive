@@ -41,8 +41,12 @@ assert_secure_config(get_settings())
 
 def require_internal_key(x_internal_key: str = Header(default="")):
     settings = get_settings()
-    # Constant-time compare so the check can't be probed via timing.
-    if not hmac.compare_digest(x_internal_key, settings.internal_api_key):
+    # Constant-time compare so the check can't be probed via timing. Compare as
+    # bytes: compare_digest rejects non-ASCII str inputs with TypeError, which would
+    # surface a header like "café" as an unhandled 500 instead of a clean 401.
+    if not hmac.compare_digest(
+        x_internal_key.encode("utf-8"), settings.internal_api_key.encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail="Invalid internal key")
 
 

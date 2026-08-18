@@ -5,6 +5,22 @@ const { emitToUser } = require('../realtime');
 const { nextOccurrence } = require('../utils/recurrence');
 
 let timer = null;
+let running = false;
+
+// Advance a recurrence past `now`. After downtime a chained occurrence computed
+// straight from the last fire time can itself already be in the past, so the next
+// tick would fire it again immediately — a week's outage on a DAILY reminder becomes
+// seven notifications in a few minutes. Collapse that backlog into one upcoming
+// occurrence instead. The guard bounds a pathological base date.
+function nextFutureOccurrence(from, recurrence, now) {
+  let next = nextOccurrence(from, recurrence);
+  let guard = 0;
+  while (next && next <= now && guard < 1000) {
+    next = nextOccurrence(next, recurrence);
+    guard += 1;
+  }
+  return next;
+}
 
 // Poll for due, unsent reminders, push them over Socket.IO, and mark them sent.
 // Persistent (DB-backed) so restarts don't drop reminders — a due reminder is
@@ -24,17 +40,27 @@ async function tick() {
   }
 
   for (const reminder of due) {
+    // Mark sent BEFORE emitting: if the two overlap or the process dies between
+    // them, dropping one notification beats sending it twice on the next tick.
+    try {
+      await prisma.reminder.update({ where: { id: reminder.id }, data: { sent: true } });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[scheduler] mark-sent failed for ${reminder.id}: ${err.message}`);
+      continue;
+    }
+
     emitToUser(reminder.userId, 'reminder', {
       id: reminder.id,
       message: reminder.message,
       remindAt: reminder.remindAt,
       taskId: reminder.taskId,
     });
+
     try {
-      await prisma.reminder.update({ where: { id: reminder.id }, data: { sent: true } });
       // Recurring reminder: chain the next occurrence as a fresh unsent row so
       // the persistent scheduler keeps firing it on future ticks.
-      const next = nextOccurrence(reminder.remindAt, reminder.recurrence);
+      const next = nextFutureOccurrence(reminder.remindAt, reminder.recurrence, now);
       if (next) {
         await prisma.reminder.create({
           data: {
@@ -49,25 +75,46 @@ async function tick() {
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn(`[scheduler] mark-sent failed for ${reminder.id}: ${err.message}`);
+      console.warn(`[scheduler] chaining failed for ${reminder.id}: ${err.message}`);
     }
   }
 }
 
+// Skip a tick while the previous one is still in flight. setInterval fires on a
+// fixed cadence regardless of how long the async body takes, so a slow tick would
+// otherwise overlap the next and re-read the same due rows.
+async function guardedTick() {
+  if (running) return;
+  running = true;
+  try {
+    await tick();
+  } catch {
+    // A scheduler must never throw into the event loop.
+  } finally {
+    running = false;
+  }
+}
+
+// Chained setTimeout rather than setInterval, so the gap is measured from the end
+// of one run to the start of the next.
 function startScheduler(intervalMs = 30000) {
   if (timer) return timer;
-  timer = setInterval(() => {
-    tick().catch(() => {});
-  }, intervalMs);
-  if (timer.unref) timer.unref();
+  const loop = () => {
+    timer = setTimeout(async () => {
+      await guardedTick();
+      if (timer) loop();
+    }, intervalMs);
+    if (timer.unref) timer.unref();
+  };
+  loop();
   return timer;
 }
 
 function stopScheduler() {
   if (timer) {
-    clearInterval(timer);
+    clearTimeout(timer);
     timer = null;
   }
 }
 
-module.exports = { startScheduler, stopScheduler, tick };
+module.exports = { startScheduler, stopScheduler, tick, guardedTick, nextFutureOccurrence };
