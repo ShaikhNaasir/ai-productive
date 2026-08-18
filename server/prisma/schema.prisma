@@ -47,6 +47,11 @@ enum UserStatus {
   DISABLED
 }
 
+enum Plan {
+  FREE
+  PAID
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -59,6 +64,11 @@ model User {
   // rejected everywhere and cannot log in.
   role         Role       @default(USER)
   status       UserStatus @default(ACTIVE)
+  // SaaS tier scaffold (billing itself is a later slice) + activity stamp for the
+  // admin "active today" metric.
+  plan         Plan       @default(FREE)
+  planRenewsAt DateTime?
+  lastActiveAt DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 

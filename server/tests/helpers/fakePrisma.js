@@ -19,7 +19,7 @@ const modelDefaults = {
   taskShares: { role: 'VIEW' },
   aiUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
   googleAccounts: { accessToken: null, expiryDate: null, calendarId: 'primary', syncToken: null, lastSyncedAt: null },
-  users: { name: null, tokenVersion: 0 },
+  users: { name: null, tokenVersion: 0, role: 'USER', status: 'ACTIVE', plan: 'FREE', planRenewsAt: null, lastActiveAt: null },
 };
 
 function matchCondition(value, cond) {
@@ -138,13 +138,27 @@ function makeModel(name) {
       if (include) return applyInclude([found], include, rows)[0];
       return applySelect([found], select)[0];
     },
-    findMany: async ({ where, orderBy, include, select, take } = {}) => {
+    findMany: async ({ where, orderBy, include, select, take, skip } = {}) => {
       const filtered = rows.filter((r) => matchWhere(r, where));
       let ordered = applyOrderBy(filtered, orderBy);
+      if (skip != null) ordered = ordered.slice(skip);
       if (take != null) ordered = ordered.slice(0, take);
       return include ? applyInclude(ordered, include, rows) : applySelect(ordered, select);
     },
     count: async ({ where } = {}) => rows.filter((r) => matchWhere(r, where)).length,
+    // Minimal aggregate: enough for the admin metrics/drill-down (_count + _sum).
+    aggregate: async ({ where, _sum, _count } = {}) => {
+      const filtered = rows.filter((r) => matchWhere(r, where));
+      const out = {};
+      if (_count) out._count = filtered.length;
+      if (_sum) {
+        out._sum = {};
+        for (const key of Object.keys(_sum)) {
+          out._sum[key] = filtered.reduce((acc, r) => acc + Number(r[key] || 0), 0);
+        }
+      }
+      return out;
+    },
     create: async ({ data }) => {
       const now = new Date();
       const row = {

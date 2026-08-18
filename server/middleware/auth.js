@@ -33,6 +33,18 @@ async function requireAuth(req, res, next) {
     }
     req.user = { id: user.id, email: user.email, role: user.role };
     setUserId(user.id);
+
+    // Best-effort activity stamp for the admin "active today" metric. Throttled to
+    // ~5 min so it isn't a write on every request; failures never break auth.
+    try {
+      const last = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+      if (Date.now() - last > 5 * 60 * 1000) {
+        await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
+      }
+    } catch {
+      /* activity stamp is best-effort */
+    }
+
     return next();
   } catch (err) {
     // A real datastore error is a 500, not an auth failure.

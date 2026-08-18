@@ -159,9 +159,15 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   responses carry `user.role`. Tests: `admin.test.js` (5) — bootstrap, 403 for
   non-admins, login promotion, disabled lockout, unauth 401. Server 196 green,
   lint clean. Migration deferred (`db push`): `users.role`, `users.status`.
-- [ ] **D2 — Metrics + users read API.** `GET /api/admin/metrics` (totals, signups,
-  active, plan breakdown, AI spend) and `/api/admin/users` + `/:id` — metadata and
-  aggregate counts only, paginated. Adds `User.plan`/`planRenewsAt`/`lastActiveAt`.
+- [x] **D2 — Metrics + users read API.** `GET /api/admin/metrics` (user totals +
+  7/30d signups + active-today + disabled, plan breakdown, content counts, AI spend
+  via `aiUsage.aggregate`), `GET /api/admin/users` (paginated, `search`/`role`/
+  `status`/`plan` filters, metadata-only projection), `GET /api/admin/users/:id`
+  (per-user counts + AI aggregate). No private content anywhere. Added `User.plan`
+  (FREE/PAID) + `planRenewsAt` + `lastActiveAt` (stamped throttled in `requireAuth`).
+  `fakePrisma` gained `skip` + a minimal `aggregate`. Tests: `admin.test.js` +5
+  (metrics/list/search/drill-down/gating, all asserting no content leak). Server 201
+  green, lint clean. Migration deferred (`db push`): `users.plan/planRenewsAt/lastActiveAt`.
 - [ ] **D3 — Moderation + audit.** disable/enable, force-logout (tokenVersion bump +
   socket disconnect), grant/revoke admin, set plan, delete (soft by default) —
   each with confirms + an `AdminAuditLog` row and self-lock guards.
