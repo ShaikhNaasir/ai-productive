@@ -28,12 +28,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401, clear the token so the app redirects to login.
+// Broadcast so AuthContext can drop the user. Clearing the token alone leaves the
+// app rendering the authenticated shell — with every request failing — until a
+// manual reload, because ProtectedRoute reads `user`, not the token.
+export const SESSION_EXPIRED_EVENT = 'pa:session-expired';
+
+// On 401, clear the token and tell the app the session is gone.
 api.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
       setToken(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      }
     }
     return Promise.reject(error);
   }

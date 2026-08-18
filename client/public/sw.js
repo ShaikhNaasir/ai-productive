@@ -4,7 +4,11 @@
  * private user data is ever stored. Only the static app shell (same-origin
  * navigations and build assets) is cached, which enables the offline shell.
  */
-const CACHE = 'pa-shell-v1';
+// __BUILD_ID__ is replaced at build time (see vite.config.js). A cache name that
+// never changes means the activate handler below has nothing to delete, so every
+// deploy's content-hashed assets pile up in Cache Storage forever.
+const BUILD_ID = '__BUILD_ID__';
+const CACHE = `pa-shell-${BUILD_ID}`;
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 const ASSET_RE = /\.(?:js|css|svg|png|jpg|jpeg|webp|gif|ico|woff2?)$/;
 
