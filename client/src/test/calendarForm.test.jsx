@@ -17,6 +17,21 @@ describe('Calendar forms (labeled UI)', () => {
     expect(screen.getByLabelText('Repeat')).toBeInTheDocument();
   });
 
+  it('shows a clock time for timed events but not for all-day events', async () => {
+    vi.spyOn(calendarService, 'events').mockResolvedValue([
+      { type: 'schedule', id: 's-allday', title: 'Conference day', date: '2026-08-21T00:00:00.000Z', meta: { allDay: true } },
+      { type: 'schedule', id: 's-timed', title: 'Team standup', date: '2026-08-19T09:30:00.000Z', meta: { allDay: false } },
+    ]);
+
+    render(<Calendar />);
+
+    const row = async (title) => (await screen.findByText(title)).parentElement.parentElement;
+    const timePattern = /\d{1,2}:\d{2}/;
+
+    expect(timePattern.test((await row('Team standup')).textContent)).toBe(true);
+    expect(timePattern.test((await row('Conference day')).textContent)).toBe(false);
+  });
+
   it('creates an event from the labeled form', async () => {
     vi.spyOn(calendarService, 'events').mockResolvedValue([]);
     const createSpy = vi

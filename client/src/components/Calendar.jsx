@@ -183,7 +183,11 @@ export default function Calendar() {
                         <Badge variant="outline">Synced</Badge>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">{formatDate(e.date, { withTime: true })}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {/* All-day events have no meaningful clock time — showing one
+                          (e.g. midnight rendered in local tz) is misleading. */}
+                      {formatDate(e.date, { withTime: !(e.type === 'schedule' && e.meta?.allDay) })}
+                    </span>
                   </div>
                 ))}
               </CardContent>
