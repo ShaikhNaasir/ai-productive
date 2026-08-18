@@ -99,6 +99,28 @@ async function update(req, res) {
   const data = updateTaskSchema.parse(req.body);
   // Owner or a user with EDIT access may change the task.
   const prior = await getAccessibleTask(req.user.id, req.params.id, { edit: true });
+
+  // Re-parenting is owner-only and must stay one level deep within the same user.
+  // Without this an EDIT sharee could move the task under a task they own and then
+  // delete that parent, destroying a task only the owner may delete (DB cascade).
+  if ('parentId' in data) {
+    if (prior.userId !== req.user.id) {
+      throw ApiError.forbidden('Only the owner can move this task');
+    }
+    if (data.parentId === prior.id) {
+      throw ApiError.badRequest('A task cannot be its own parent');
+    }
+    await assertValidParent(req.user.id, data.parentId);
+    // A task that already has children cannot become a child itself — that would
+    // make its subtasks two levels deep.
+    if (data.parentId) {
+      const childCount = await prisma.task.count({ where: { parentId: prior.id } });
+      if (childCount > 0) {
+        throw ApiError.badRequest('Cannot nest a task that has subtasks of its own');
+      }
+    }
+  }
+
   // Snapshot the fields we need before the update — the ORM row is re-read after.
   const wasCompleted = prior.status === 'COMPLETED';
   const recurring = { recurrence: prior.recurrence, dueDate: prior.dueDate, userId: prior.userId, title: prior.title, description: prior.description, priority: prior.priority, tags: prior.tags };

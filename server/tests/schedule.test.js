@@ -47,6 +47,32 @@ describe('schedules + reminders + calendar', () => {
     expect(res.body.reminder.sent).toBe(false);
   });
 
+  test('reminder rejects a taskId owned by another user', async () => {
+    const stranger = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'rem-stranger@b.com', password: 'password123' });
+    const theirs = await request(app)
+      .post('/api/tasks')
+      .set({ Authorization: `Bearer ${stranger.body.token}` })
+      .send({ title: 'their task' });
+
+    const res = await request(app)
+      .post('/api/reminders')
+      .set(auth())
+      .send({ message: 'peek', remindAt: '2026-08-11T10:00:00Z', taskId: theirs.body.task.id });
+    expect(res.status).toBe(404);
+  });
+
+  test('reminder accepts a taskId the caller owns', async () => {
+    const mine = await request(app).post('/api/tasks').set(auth()).send({ title: 'my task' });
+    const res = await request(app)
+      .post('/api/reminders')
+      .set(auth())
+      .send({ message: 'linked', remindAt: '2026-08-11T10:00:00Z', taskId: mine.body.task.id });
+    expect(res.status).toBe(201);
+    expect(res.body.reminder.taskId).toBe(mine.body.task.id);
+  });
+
   test('calendar aggregates tasks, schedules, reminders', async () => {
     await request(app).post('/api/tasks').set(auth()).send({ title: 'due task', dueDate: '2026-08-12T15:00:00Z' });
     const res = await request(app).get('/api/calendar').set(auth());

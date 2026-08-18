@@ -4,7 +4,9 @@
 // Supports: findUnique, findFirst, findMany (where + orderBy), create, update, delete, count.
 
 let counter = 1;
-const nextId = () => String(counter++);
+// UUID-shaped (v4 layout) so the `.uuid()` validators on request bodies behave the
+// same against fake ids as they do against Prisma's real `@default(uuid())` values.
+const nextId = () => `00000000-0000-4000-8000-${String(counter++).padStart(12, '0')}`;
 
 const modelDefaults = {
   tasks: { priority: 'MEDIUM', status: 'PENDING', recurrence: 'NONE', tags: [], description: null, dueDate: null, completedAt: null, parentId: null },
