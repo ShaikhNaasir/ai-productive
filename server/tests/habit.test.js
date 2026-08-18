@@ -100,6 +100,26 @@ describe('habits', () => {
     expect(list.body.habits.some((h) => h.id === id)).toBe(false);
   });
 
+  test('concurrent check-ins stay idempotent instead of erroring', async () => {
+    const created = await request(app).post('/api/habits').set(auth()).send({ name: 'Race habit' });
+    const id = created.body.habit.id;
+
+    // Two in-flight requests would both miss a find-then-create and collide on the
+    // [habitId, date] unique constraint, surfacing P2002 as a 500.
+    const [a, b] = await Promise.all([
+      request(app).post(`/api/habits/${id}/check-in`).set(auth()),
+      request(app).post(`/api/habits/${id}/check-in`).set(auth()),
+    ]);
+
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+
+    const list = await request(app).get('/api/habits').set(auth());
+    const habit = list.body.habits.find((h) => h.id === id);
+    expect(habit.totalCheckIns).toBe(1);
+    expect(habit.checkedInToday).toBe(true);
+  });
+
   test('analytics summary reports habit completion for today', async () => {
     const created = await request(app).post('/api/habits').set(auth()).send({ name: 'Analytics habit' });
     await request(app).post(`/api/habits/${created.body.habit.id}/check-in`).set(auth());

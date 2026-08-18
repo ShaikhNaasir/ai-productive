@@ -181,6 +181,32 @@ function makeModel(name) {
       }
       return removed;
     },
+    // Compound-unique `where` keys arrive as { field_field: { field, field } };
+    // flatten them so the same matcher handles both forms.
+    upsert: async ({ where, create, update }) => {
+      const flat = {};
+      for (const [key, val] of Object.entries(where)) {
+        if (val && typeof val === 'object' && !(val instanceof Date) && key.includes('_')) {
+          Object.assign(flat, val);
+        } else {
+          flat[key] = val;
+        }
+      }
+      const existing = rows.find((r) => matchWhere(r, flat));
+      if (existing) {
+        Object.assign(existing, update, { updatedAt: new Date() });
+        return existing;
+      }
+      const now = new Date();
+      const row = { id: nextId(), createdAt: now, updatedAt: now, ...defaults, ...create };
+      rows.push(row);
+      return row;
+    },
+    updateMany: async ({ where, data } = {}) => {
+      const matched = rows.filter((r) => matchWhere(r, where));
+      matched.forEach((r) => Object.assign(r, data, { updatedAt: new Date() }));
+      return { count: matched.length };
+    },
     deleteMany: async ({ where } = {}) => {
       const toRemove = rows.filter((r) => matchWhere(r, where));
       toRemove.forEach((r) => rows.splice(rows.indexOf(r), 1));
