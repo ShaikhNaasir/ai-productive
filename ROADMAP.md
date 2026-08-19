@@ -194,3 +194,20 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   `billing_events`. Tests: server +13 (`plans`,`billing`), client +3 (`billing`).
   Server Jest 221, client Vitest 48 green; lint + build OK. **Owner:** create a
   Razorpay Plan + webhook, set `RAZORPAY_*` on Render (`db push` applies the schema).
+
+## Tier E — Account security
+
+- [x] **E1 — Email verification.** New accounts start unverified; a hashed, expiring
+  token is emailed (`services/mailer.js` Resend via axios, no dep;
+  `services/emailVerification.js` issue/send/verify). `POST /auth/verify-email`
+  (public) + `POST /auth/resend-verification`. `requireVerified` middleware hard-blocks
+  key actions (AI, task share, billing checkout, doc upload, Google connect/sync) with
+  403 `EMAIL_UNVERIFIED` — but only when email is configured (can't require what you
+  can't deliver), and admins are exempt. Client: `/verify-email` page + a persistent
+  Layout "Verify your account" banner (resend / refresh). Pre-existing accounts are
+  grandfathered verified on boot. Schema: `User.emailVerified`/`emailVerifyTokenHash`/
+  `emailVerifyExpires`. Tests: server +9, client +5. Server Jest 231, client Vitest 53
+  green; lint + build OK. **Owner:** set `RESEND_API_KEY` on Render to turn it on.
+- [ ] **E2 — Two-factor auth (TOTP).** Optional per-user 2FA: enroll (authenticator
+  QR/secret), verify-and-enable, a second-factor challenge at login, backup codes,
+  disable. TOTP via Node `crypto` (RFC 6238, no dep). Separate slice.

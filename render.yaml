@@ -74,6 +74,12 @@ services:
         sync: false
       - key: RAZORPAY_PLAN_ID
         sync: false          # webhook URL: https://<api>.onrender.com/api/billing/webhook
+      # Email verification (Roadmap E1). Resend API key + sender. Absent key leaves
+      # the hard-block off; set in the dashboard to turn verification on.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
       - fromGroup: shared-secrets
 
   # ---- FastAPI AI service ----

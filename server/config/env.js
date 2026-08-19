@@ -39,6 +39,13 @@ const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/google/callback',
   },
+  // Email verification (Roadmap E1). Optional — with no Resend key, verification
+  // emails aren't sent and the hard-block on unverified accounts stays OFF (you
+  // can't require what you can't deliver). Set the key to turn the feature on.
+  resend: {
+    apiKey: process.env.RESEND_API_KEY,
+    from: process.env.RESEND_FROM || 'Productivity <onboarding@resend.dev>',
+  },
   // SaaS billing (Roadmap D5). Optional — absent keys leave billing disabled: the
   // checkout/cancel endpoints degrade to 503 and no one can be upgraded via
   // payment, but plan-gating still runs off the User.plan column (an admin can set

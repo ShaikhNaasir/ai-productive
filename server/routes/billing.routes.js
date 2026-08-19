@@ -3,6 +3,7 @@
 const express = require('express');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireAuth } = require('../middleware/auth');
+const { requireVerified } = require('../middleware/requireVerified');
 const ctrl = require('../controllers/billing.controller');
 
 const router = express.Router();
@@ -14,7 +15,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get('/status', asyncHandler(ctrl.status));
-router.post('/checkout', asyncHandler(ctrl.checkout));
+router.post('/checkout', requireVerified, asyncHandler(ctrl.checkout));
 router.post('/verify', asyncHandler(ctrl.verify));
 router.post('/cancel', asyncHandler(ctrl.cancel));
 

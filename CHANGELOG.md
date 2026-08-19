@@ -66,6 +66,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Email verification (Roadmap E1).** New accounts start unverified and must confirm
+  their email. A hashed, expiring token is emailed via Resend (`services/mailer.js`,
+  REST over axios, no new dependency) and consumed by `POST /api/auth/verify-email`;
+  `POST /api/auth/resend-verification` re-sends it. A `requireVerified` middleware
+  hard-blocks key actions until verified — AI endpoints, task sharing, billing
+  checkout, document upload, and Google connect/sync — returning a 403 with
+  `code: EMAIL_UNVERIFIED` that the client renders as a prompt. Two safety rails: the
+  block only engages when email delivery is configured (you can't require what you
+  can't send), and admins are always exempt. The client adds a `/verify-email` landing
+  page and a persistent "Verify your account" banner in the app shell (resend /
+  refresh). Pre-existing accounts are grandfathered as verified on boot so the rollout
+  doesn't lock anyone out. Schema (via `prisma db push`): `User.emailVerified`,
+  `emailVerifyTokenHash`, `emailVerifyExpires`. Tests: server Jest **231**, client
+  Vitest **53**; lint + build clean. **Ops:** set `RESEND_API_KEY` (and optionally
+  `RESEND_FROM`) on Render to turn verification on; without it the feature stays dark.
 - **SaaS billing — Razorpay (Roadmap D5).** A free/paid tier with real payment
   integration. Everyone is FREE by default; PAID is unlocked by an active Razorpay
   subscription (or an admin).

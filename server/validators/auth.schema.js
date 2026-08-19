@@ -27,9 +27,14 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(10, 'Password must be at least 10 characters').max(128),
 });
 
+const verifyEmailSchema = z.object({
+  token: z.string().min(1),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
   updateProfileSchema,
   changePasswordSchema,
+  verifyEmailSchema,
 };

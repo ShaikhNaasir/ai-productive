@@ -5,6 +5,7 @@ const multer = require('multer');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { requireAuth } = require('../middleware/auth');
+const { requireVerified } = require('../middleware/requireVerified');
 const { isTextMime, PDF_MIME } = require('../services/textExtract');
 const { PLAN_LIMITS } = require('../config/plans');
 const ctrl = require('../controllers/document.controller');
@@ -37,6 +38,6 @@ function uploadSingle(req, res, next) {
 const router = express.Router();
 
 router.use(requireAuth);
-router.post('/upload', uploadSingle, asyncHandler(ctrl.uploadAndSummarize));
+router.post('/upload', requireVerified, uploadSingle, asyncHandler(ctrl.uploadAndSummarize));
 
 module.exports = router;

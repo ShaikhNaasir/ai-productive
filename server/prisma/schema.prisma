@@ -61,6 +61,11 @@ model User {
   // Bumped on logout / password change to invalidate previously issued JWTs
   // (the token carries this version and is rejected once it no longer matches).
   tokenVersion Int        @default(0)
+  // Email verification (Roadmap E1). A new account starts unverified; a hashed,
+  // expiring token is emailed and cleared on verify. Admins are auto-verified.
+  emailVerified       Boolean   @default(false)
+  emailVerifyTokenHash String?
+  emailVerifyExpires   DateTime?
   // Admin panel (Roadmap D). role gates /api/admin/*; a DISABLED account is
   // rejected everywhere and cannot log in.
   role         Role       @default(USER)

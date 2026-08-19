@@ -12,4 +12,6 @@ export const authService = {
       if (r.data && r.data.token) setToken(r.data.token);
       return r.data;
     }),
+  verifyEmail: (token) => api.post('/auth/verify-email', { token }).then((r) => r.data),
+  resendVerification: () => api.post('/auth/resend-verification').then((r) => r.data),
 };

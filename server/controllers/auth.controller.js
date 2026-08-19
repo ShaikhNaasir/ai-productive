@@ -6,11 +6,13 @@ const config = require('../config/env');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { disconnectUser } = require('../realtime');
 const ApiError = require('../utils/ApiError');
+const emailVerification = require('../services/emailVerification');
 const {
   registerSchema,
   loginSchema,
   updateProfileSchema,
   changePasswordSchema,
+  verifyEmailSchema,
 } = require('../validators/auth.schema');
 
 const SALT_ROUNDS = 10;
@@ -21,7 +23,14 @@ const SALT_ROUNDS = 10;
 const DUMMY_HASH = bcrypt.hashSync('unused-placeholder-password', SALT_ROUNDS);
 
 function serializeUser(user) {
-  return { id: user.id, email: user.email, name: user.name, role: user.role, createdAt: user.createdAt };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    emailVerified: user.emailVerified,
+    createdAt: user.createdAt,
+  };
 }
 
 // Emails in the ADMIN_EMAILS allowlist bootstrap as admins. The allowlist lives
@@ -43,16 +52,27 @@ async function register(req, res) {
   }
 
   const passwordHash = await bcrypt.hash(data.password, SALT_ROUNDS);
+  // Admins (allowlist) are trusted and auto-verified so they're never nagged or
+  // locked out of admin actions. Everyone else must verify their email.
+  const admin = isAdminEmail(data.email);
   const user = await prisma.user.create({
     data: {
       email: data.email,
       passwordHash,
       name: data.name,
-      role: isAdminEmail(data.email) ? 'ADMIN' : 'USER',
+      role: admin ? 'ADMIN' : 'USER',
+      emailVerified: admin,
     },
   });
 
-  res.status(201).json({ user: serializeUser(user), token: issueToken(user) });
+  // Fire off the verification email (best-effort). `delivery` tells the client
+  // whether a real email went out; a dev link is included only off-production.
+  let verification = { delivery: 'skipped' };
+  if (!admin) {
+    verification = await emailVerification.sendVerification(user);
+  }
+
+  res.status(201).json({ user: serializeUser(user), token: issueToken(user), verification });
 }
 
 async function login(req, res) {
@@ -79,7 +99,11 @@ async function login(req, res) {
   // explicit admin action.
   let account = user;
   if (isAdminEmail(user.email) && user.role !== 'ADMIN') {
-    account = await prisma.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } });
+    // Promote to admin and auto-verify (admins are trusted).
+    account = await prisma.user.update({
+      where: { id: user.id },
+      data: { role: 'ADMIN', emailVerified: true },
+    });
   }
 
   res.json({ user: serializeUser(account), token: issueToken(account) });
@@ -162,4 +186,38 @@ async function changePassword(req, res) {
   res.json({ success: true, token: issueToken(updated) });
 }
 
-module.exports = { register, login, logout, me, updateProfile, changePassword };
+// Consume an emailed token to mark the account verified. Public (the link is
+// clicked from an email, possibly before the SPA has a session).
+async function verifyEmail(req, res) {
+  const { token } = verifyEmailSchema.parse(req.body);
+  const user = await emailVerification.verify(token);
+  if (!user) {
+    throw ApiError.badRequest('This verification link is invalid or has expired.');
+  }
+  res.json({ success: true, user: serializeUser(user) });
+}
+
+// Re-send the verification email for the signed-in user. No-op success if already
+// verified so the client can call it idempotently.
+async function resendVerification(req, res) {
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+  if (user.emailVerified) {
+    return res.json({ success: true, alreadyVerified: true });
+  }
+  const verification = await emailVerification.sendVerification(user);
+  res.json({ success: true, verification });
+}
+
+module.exports = {
+  register,
+  login,
+  logout,
+  me,
+  updateProfile,
+  changePassword,
+  verifyEmail,
+  resendVerification,
+};

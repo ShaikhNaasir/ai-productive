@@ -21,6 +21,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationContext';
 import InstallPrompt from '@/components/InstallPrompt';
 import BrandFooter from '@/components/BrandFooter';
+import VerifyBanner from '@/components/VerifyBanner';
 import { Button } from '@/components/ui/button';
 import { cn, formatDate } from '@/lib/utils';
 
@@ -141,6 +142,8 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        <VerifyBanner />
 
         <main className="dashboard flex-1 p-4 md:p-6">
           <Outlet />

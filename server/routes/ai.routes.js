@@ -3,12 +3,14 @@
 const express = require('express');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireAuth } = require('../middleware/auth');
+const { requireVerified } = require('../middleware/requireVerified');
 const { aiLimiter, enforceAiBudget } = require('../middleware/rateLimit');
 const ctrl = require('../controllers/ai.controller');
 
 const router = express.Router();
 
 router.use(requireAuth);
+router.use(requireVerified);
 router.use(aiLimiter);
 router.use(asyncHandler(enforceAiBudget));
 

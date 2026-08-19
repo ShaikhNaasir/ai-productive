@@ -41,6 +41,7 @@ async function requireAuth(req, res, next) {
       role: user.role,
       plan: user.plan,
       planRenewsAt: user.planRenewsAt,
+      emailVerified: user.emailVerified,
     };
     setUserId(user.id);
 

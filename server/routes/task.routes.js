@@ -3,6 +3,7 @@
 const express = require('express');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireAuth } = require('../middleware/auth');
+const { requireVerified } = require('../middleware/requireVerified');
 const ctrl = require('../controllers/task.controller');
 
 const router = express.Router();
@@ -17,7 +18,7 @@ router.get('/:id', asyncHandler(ctrl.getOne));
 router.patch('/:id', asyncHandler(ctrl.update));
 router.post('/:id/complete', asyncHandler(ctrl.complete));
 router.delete('/:id', asyncHandler(ctrl.remove));
-router.post('/:id/share', asyncHandler(ctrl.share));
+router.post('/:id/share', requireVerified, asyncHandler(ctrl.share));
 router.get('/:id/shares', asyncHandler(ctrl.listShares));
 router.delete('/:id/share/:userId', asyncHandler(ctrl.unshare));
 

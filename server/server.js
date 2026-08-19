@@ -19,6 +19,18 @@ if (googleCalendar.isConfigured()) {
   require('./services/googleSyncScheduler').startScheduler();
 }
 
+// One-time grandfather of pre-existing accounts as email-verified (Roadmap E1).
+// Best-effort and idempotent; never blocks startup.
+require('./services/emailVerification')
+  .grandfatherExisting()
+  .then((n) => {
+    if (n > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`Grandfathered ${n} pre-existing account(s) as email-verified`);
+    }
+  })
+  .catch(() => {});
+
 server.listen(config.port, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${config.port} (${config.env})`);
