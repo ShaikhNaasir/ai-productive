@@ -39,6 +39,16 @@ const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/google/callback',
   },
+  // SaaS billing (Roadmap D5). Optional — absent keys leave billing disabled: the
+  // checkout/cancel endpoints degrade to 503 and no one can be upgraded via
+  // payment, but plan-gating still runs off the User.plan column (an admin can set
+  // it) and core CRUD is unaffected.
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID,
+    keySecret: process.env.RAZORPAY_KEY_SECRET,
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
+    planId: process.env.RAZORPAY_PLAN_ID,
+  },
   // Semantic search needs the AI service + Voyage key + pgvector. Off by default so
   // core CRUD never blocks on embeddings; enable in production once configured.
   embeddingsEnabled: process.env.EMBEDDINGS_ENABLED === 'true',

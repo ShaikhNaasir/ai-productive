@@ -6,9 +6,13 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { requireAuth } = require('../middleware/auth');
 const { isTextMime, PDF_MIME } = require('../services/textExtract');
+const { PLAN_LIMITS } = require('../config/plans');
 const ctrl = require('../controllers/document.controller');
 
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
+// Hard ceiling = the most any plan allows; the per-plan cap (e.g. 1MB on FREE) is
+// enforced in the controller so it can return a 402 upgrade prompt instead of a 400.
+const MAX_FILE_BYTES = PLAN_LIMITS.PAID.docSizeBytes;
+const MAX_FILE_MB = Math.round(MAX_FILE_BYTES / (1024 * 1024));
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -25,7 +29,7 @@ function uploadSingle(req, res, next) {
   upload.single('file')(req, res, (err) => {
     if (!err) return next();
     if (err instanceof ApiError) return next(err);
-    if (err.code === 'LIMIT_FILE_SIZE') return next(ApiError.badRequest('File too large (max 2MB)'));
+    if (err.code === 'LIMIT_FILE_SIZE') return next(ApiError.badRequest(`File too large (max ${MAX_FILE_MB}MB)`));
     return next(ApiError.badRequest(err.message || 'Upload failed'));
   });
 }

@@ -12,6 +12,7 @@ const statusVariant = { ACTIVE: 'default', DISABLED: 'secondary', DELETED: 'dest
 export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [plan, setPlan] = useState('');
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -19,11 +20,19 @@ export default function AdminUsers() {
   const load = useCallback(async () => {
     setError('');
     try {
-      setData(await adminService.users({ search: search || undefined, status: status || undefined, page, limit: 25 }));
+      setData(
+        await adminService.users({
+          search: search || undefined,
+          status: status || undefined,
+          plan: plan || undefined,
+          page,
+          limit: 25,
+        })
+      );
     } catch (err) {
       setError(apiError(err, 'Failed to load users'));
     }
-  }, [search, status, page]);
+  }, [search, status, plan, page]);
 
   useEffect(() => {
     load();
@@ -58,6 +67,15 @@ export default function AdminUsers() {
           <option value="ACTIVE">Active</option>
           <option value="DISABLED">Disabled</option>
           <option value="DELETED">Deleted</option>
+        </select>
+        <select
+          value={plan}
+          onChange={(e) => { setPlan(e.target.value); setPage(1); }}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="">All plans</option>
+          <option value="FREE">Free</option>
+          <option value="PAID">Paid</option>
         </select>
         <Button type="submit">Search</Button>
       </form>

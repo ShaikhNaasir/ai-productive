@@ -7,6 +7,7 @@ const {
   updateNoteSchema,
   listNoteQuerySchema,
 } = require('../validators/note.schema');
+const { assertWithinQuota } = require('../services/quota');
 
 let onNoteChanged = null;
 function setNoteChangeHook(fn) {
@@ -47,6 +48,7 @@ async function getOne(req, res) {
 
 async function create(req, res) {
   const data = createNoteSchema.parse(req.body);
+  await assertWithinQuota(req.user, 'notes');
   const note = await prisma.note.create({
     data: {
       ...data,

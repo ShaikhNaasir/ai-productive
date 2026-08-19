@@ -4,6 +4,7 @@ const prisma = require('../models/prisma');
 const ApiError = require('../utils/ApiError');
 const { nextOccurrence } = require('../utils/recurrence');
 const { getOwnedTask, getAccessibleTask } = require('../services/taskAccess');
+const { assertWithinQuota } = require('../services/quota');
 const {
   createTaskSchema,
   updateTaskSchema,
@@ -82,6 +83,7 @@ async function getOne(req, res) {
 
 async function create(req, res) {
   const data = createTaskSchema.parse(req.body);
+  await assertWithinQuota(req.user, 'tasks');
   await assertValidParent(req.user.id, data.parentId);
   const task = await prisma.task.create({
     data: {

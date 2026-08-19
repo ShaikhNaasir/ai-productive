@@ -3,12 +3,22 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 import Settings from '@/pages/Settings';
 import Calendar from '@/components/Calendar';
 import { googleService } from '@/services/googleService';
+import { billingService } from '@/services/billingService';
 import { calendarService } from '@/services/calendarService';
 
 // Settings uses useAuth; stub it so we can render the page in isolation.
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ user: { name: 'Test', email: 'a@b.com' }, setUser: vi.fn() }),
 }));
+
+// Settings also renders the billing card; keep it quiet so these Google tests stay
+// focused (and don't fire a real /billing/status request).
+vi.spyOn(billingService, 'status').mockResolvedValue({
+  plan: 'FREE',
+  billingConfigured: false,
+  limits: { tasks: 100, notes: 50, aiMonthlyCostUsd: 2 },
+  usage: { tasks: 0, notes: 0, aiMonthlyCostUsd: 0 },
+});
 
 // jsdom's window.location (and its assign) is read-only; replace it wholesale with
 // a plain stub so we can assert navigation on connect.

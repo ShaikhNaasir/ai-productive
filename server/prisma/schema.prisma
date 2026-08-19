@@ -65,10 +65,16 @@ model User {
   // rejected everywhere and cannot log in.
   role         Role       @default(USER)
   status       UserStatus @default(ACTIVE)
-  // SaaS tier scaffold (billing itself is a later slice) + activity stamp for the
-  // admin "active today" metric.
+  // SaaS tier (Roadmap D5). Everyone is FREE by default; PAID is granted by a
+  // Razorpay subscription webhook (or an admin). `planRenewsAt` is the current
+  // billing period end — access is treated as expired once it passes.
   plan         Plan       @default(FREE)
   planRenewsAt DateTime?
+  // Razorpay linkage + last-seen subscription status (created/active/halted/
+  // cancelled/…). Null until the user starts a checkout. Never a secret.
+  razorpayCustomerId     String?
+  razorpaySubscriptionId String?
+  subscriptionStatus     String?
   lastActiveAt DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -295,6 +301,23 @@ model Reminder {
   // is near-useless since the column is overwhelmingly true once reminders age out.
   @@index([sent, remindAt])
   @@map("reminders")
+}
+
+// Razorpay webhook ledger (Roadmap D5). One row per delivered event, keyed by the
+// provider's event id so a redelivered webhook is processed at most once
+// (idempotency). No FK: the row is an immutable audit fact, kept even if the user
+// is later deleted.
+model BillingEvent {
+  id              String   @id @default(uuid())
+  providerEventId String   @unique
+  type            String
+  userId          String?
+  payload         Json?
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("billing_events")
 }
 
 // Append-only trail of admin moderation actions (Roadmap D3). No FK to users so a

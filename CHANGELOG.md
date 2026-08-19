@@ -66,6 +66,34 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **SaaS billing — Razorpay (Roadmap D5).** A free/paid tier with real payment
+  integration. Everyone is FREE by default; PAID is unlocked by an active Razorpay
+  subscription (or an admin).
+  - *Entitlements.* `config/plans.js` is the single source of truth for each tier's
+    limits — month-to-date AI spend, AI request rate, and caps on tasks, notes, and
+    document upload size. `isPaid` / `effectivePlan` treat a PAID user whose billing
+    period has lapsed as FREE (a runtime belt in case a downgrade webhook is late).
+  - *Gating.* The AI limiter's window ceiling is now plan-aware, and an
+    `enforceAiBudget` guard returns **402** once a user's month-to-date LLM spend hits
+    their plan budget. Task / note creation and document upload enforce the resource
+    caps (402 with an `upgrade` hint the client renders as a prompt).
+  - *Provider.* `services/razorpay.js` talks to Razorpay over REST (`axios` + Node
+    `crypto`; no new dependency) and is **off unless configured** — with no keys the
+    checkout / cancel endpoints degrade to 503 and gating still runs off `User.plan`,
+    so core CRUD is never affected.
+  - *Endpoints.* `GET /api/billing/status` (plan, entitlements, usage),
+    `POST /api/billing/{checkout,verify,cancel}`, and a raw-body,
+    HMAC-signature-verified, **idempotent** `POST /api/billing/webhook` (mounted before
+    the JSON body parser; a `BillingEvent` ledger dedupes redeliveries and records the
+    trail). The webhook upgrades / downgrades the user on `subscription.*` events.
+  - *Client.* A "Plan & billing" card in Settings shows usage against limits and drives
+    the Razorpay Checkout upgrade + cancel flow; the admin users view gains a plan
+    filter and per-user subscription status.
+  - Schema (via `prisma db push`): `User.razorpayCustomerId` / `razorpaySubscriptionId`
+    / `subscriptionStatus`, and the `billing_events` table. Tests: server Jest **221**,
+    client Vitest **48**; lint + build clean. **Ops:** create a Razorpay Plan and a
+    webhook pointing at `<api>/api/billing/webhook`, then set `RAZORPAY_KEY_ID` /
+    `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET` / `RAZORPAY_PLAN_ID` on Render.
 - **Admin panel (Roadmap Tier D).** A role-gated admin surface for monitoring all
   registered users — **metadata and aggregate counts only, never private content**
   (task titles, note bodies, etc.). Built custom in the existing stack (a library

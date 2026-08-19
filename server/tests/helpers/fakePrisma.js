@@ -19,8 +19,20 @@ const modelDefaults = {
   taskShares: { role: 'VIEW' },
   aiUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
   googleAccounts: { accessToken: null, expiryDate: null, calendarId: 'primary', syncToken: null, lastSyncedAt: null },
-  users: { name: null, tokenVersion: 0, role: 'USER', status: 'ACTIVE', plan: 'FREE', planRenewsAt: null, lastActiveAt: null },
+  users: {
+    name: null,
+    tokenVersion: 0,
+    role: 'USER',
+    status: 'ACTIVE',
+    plan: 'FREE',
+    planRenewsAt: null,
+    razorpayCustomerId: null,
+    razorpaySubscriptionId: null,
+    subscriptionStatus: null,
+    lastActiveAt: null,
+  },
   adminAuditLogs: { targetUserId: null, meta: null },
+  billingEvents: { userId: null, payload: null },
 };
 
 function matchCondition(value, cond) {
@@ -244,6 +256,7 @@ function createFakePrisma() {
     aiUsage: makeModel('aiUsage'),
     googleAccount: makeModel('googleAccounts'),
     adminAuditLog: makeModel('adminAuditLogs'),
+    billingEvent: makeModel('billingEvents'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},

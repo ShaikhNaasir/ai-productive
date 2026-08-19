@@ -181,5 +181,16 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   (metadata + counts + moderation buttons with confirms: disable/enable, force-logout,
   grant/revoke admin, set plan, soft/hard delete), `/admin/audit` (paginated trail).
   Tests: `adminPanel.test.jsx` (4). Client 45 green, lint clean, build OK.
-- [ ] **D5 (later) — SaaS billing.** Payment provider (Stripe/Razorpay), plan
-  upgrades + webhooks, paid-tier gating. Separate epic; provider TBD.
+- [x] **D5 — SaaS billing (Razorpay).** `config/plans.js` entitlements (single
+  source of truth: FREE vs PAID caps for AI monthly spend, AI rate, tasks, notes,
+  doc size) + `isPaid`/`effectivePlan` (expired PAID → FREE). Gating: plan-aware
+  `aiLimiter` + `enforceAiBudget` (month-to-date LLM spend → 402), task/note create
+  + doc upload quota (402). `services/razorpay.js` (REST via axios + `crypto`;
+  off-unless-keys-set → 503). `/api/billing/{status,checkout,verify,cancel}` +
+  raw-body HMAC-verified idempotent `POST /webhook` (mounted before `express.json`;
+  `BillingEvent` ledger dedupes redeliveries). Client: `billingService` + Settings
+  "Plan & billing" card (usage bars, Razorpay Checkout upgrade, cancel); admin gains
+  a plan filter + subscription status. Schema: `User.razorpay*`/`subscriptionStatus`,
+  `billing_events`. Tests: server +13 (`plans`,`billing`), client +3 (`billing`).
+  Server Jest 221, client Vitest 48 green; lint + build OK. **Owner:** create a
+  Razorpay Plan + webhook, set `RAZORPAY_*` on Render (`db push` applies the schema).

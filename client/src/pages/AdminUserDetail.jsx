@@ -79,6 +79,7 @@ export default function AdminUserDetail() {
           <div><p className="text-muted-foreground">Role</p><p>{isAdmin ? <Badge>ADMIN</Badge> : 'USER'}</p></div>
           <div><p className="text-muted-foreground">Status</p><p>{user.status}</p></div>
           <div><p className="text-muted-foreground">Plan</p><p>{user.plan}</p></div>
+          <div><p className="text-muted-foreground">Subscription</p><p>{user.subscriptionStatus || '—'}</p></div>
           <div><p className="text-muted-foreground">Joined</p><p>{formatDate(user.createdAt)}</p></div>
           <div><p className="text-muted-foreground">Last active</p><p>{user.lastActiveAt ? formatDate(user.lastActiveAt, { withTime: true }) : '—'}</p></div>
         </CardContent>

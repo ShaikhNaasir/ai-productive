@@ -18,6 +18,7 @@ jest.mock('../services/aiClient', () => ({
 const request = require('supertest');
 const createApp = require('../app');
 const aiClient = require('../services/aiClient');
+const prisma = require('../models/prisma');
 
 const app = createApp();
 let token;
@@ -98,13 +99,30 @@ describe('document upload + summarization', () => {
     expect(res.status).toBe(400);
   });
 
-  test('rejects a file over the size limit', async () => {
-    const big = Buffer.alloc(2 * 1024 * 1024 + 10, 'a');
+  test('a FREE user is blocked with 402 over the plan size cap', async () => {
+    const big = Buffer.alloc(1 * 1024 * 1024 + 10, 'a'); // > 1MB FREE cap, < 10MB ceiling
     const res = await request(app)
       .post('/api/documents/upload')
       .set(auth())
       .attach('file', big, { filename: 'big.txt', contentType: 'text/plain' });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(402);
+  });
+
+  test('a PAID user may upload beyond the free size cap', async () => {
+    aiClient.summarize.mockResolvedValue({ key_points: [], summary: '' });
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'paid-doc@b.com', password: 'password123' });
+    await prisma.user.update({
+      where: { id: reg.body.user.id },
+      data: { plan: 'PAID', planRenewsAt: new Date(Date.now() + 86400000) },
+    });
+    const big = Buffer.alloc(1 * 1024 * 1024 + 500, 'a'); // over FREE cap, under PAID cap
+    const res = await request(app)
+      .post('/api/documents/upload')
+      .set({ Authorization: `Bearer ${reg.body.token}` })
+      .attach('file', big, { filename: 'big.txt', contentType: 'text/plain' });
+    expect(res.status).toBe(201);
   });
 
   test('rejects a request with no file', async () => {

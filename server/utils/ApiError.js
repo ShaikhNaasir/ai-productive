@@ -25,6 +25,13 @@ class ApiError extends Error {
   static conflict(msg = 'Conflict') {
     return new ApiError(409, msg);
   }
+  // Plan quota exceeded — the client renders this as an upgrade prompt.
+  static paymentRequired(msg = 'Payment required', details) {
+    return new ApiError(402, msg, details);
+  }
+  static serviceUnavailable(msg = 'Service unavailable') {
+    return new ApiError(503, msg);
+  }
 }
 
 module.exports = ApiError;

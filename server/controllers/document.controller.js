@@ -4,6 +4,8 @@ const prisma = require('../models/prisma');
 const ApiError = require('../utils/ApiError');
 const aiClient = require('../services/aiClient');
 const { extractText } = require('../services/textExtract');
+const { assertWithinQuota } = require('../services/quota');
+const { limitsFor, effectivePlan } = require('../config/plans');
 
 // Cap stored note content so a large document can't bloat a row unreasonably.
 const MAX_STORED_CHARS = 100000;
@@ -22,6 +24,17 @@ function titleFromFilename(name) {
 // AI service is unavailable (summary/key points come back empty).
 async function uploadAndSummarize(req, res) {
   if (!req.file) throw ApiError.badRequest('No file uploaded');
+
+  // Plan gates: a document is stored as a note, so it counts against the note cap,
+  // and the upload size is capped per plan.
+  const maxBytes = limitsFor(effectivePlan(req.user)).docSizeBytes;
+  if (req.file.size > maxBytes) {
+    throw ApiError.paymentRequired(
+      `This file exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB upload limit on your plan. Upgrade to upload larger files.`,
+      { limit: maxBytes, plan: effectivePlan(req.user), upgrade: true }
+    );
+  }
+  await assertWithinQuota(req.user, 'notes');
 
   const text = await extractText(req.file.buffer, req.file.mimetype);
   const stored = text.slice(0, MAX_STORED_CHARS);

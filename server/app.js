@@ -9,6 +9,8 @@ const cookieParser = require('cookie-parser');
 
 const config = require('./config/env');
 const routes = require('./routes');
+const asyncHandler = require('./utils/asyncHandler');
+const billingController = require('./controllers/billing.controller');
 const { authLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/error');
 const { requestContext } = require('./middleware/requestContext');
@@ -25,6 +27,16 @@ function createApp() {
       credentials: true,
     })
   );
+  // The Razorpay webhook must verify an HMAC over the exact raw bytes, so it is
+  // mounted with a raw body parser BEFORE express.json() (which would otherwise
+  // consume and re-serialize the body, breaking the signature). It is
+  // unauthenticated by design — trust comes from the signature.
+  app.post(
+    '/api/billing/webhook',
+    express.raw({ type: '*/*', limit: '1mb' }),
+    asyncHandler(billingController.webhook)
+  );
+
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());

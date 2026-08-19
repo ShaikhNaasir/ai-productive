@@ -33,7 +33,15 @@ async function requireAuth(req, res, next) {
     if (user.status === 'DISABLED' || user.status === 'DELETED') {
       return next(ApiError.forbidden('This account is not active.'));
     }
-    req.user = { id: user.id, email: user.email, role: user.role };
+    // plan + planRenewsAt ride along so plan-gating (AI budget, resource caps) never
+    // needs a second user lookup.
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      plan: user.plan,
+      planRenewsAt: user.planRenewsAt,
+    };
     setUserId(user.id);
 
     // Best-effort activity stamp for the admin "active today" metric. Throttled to

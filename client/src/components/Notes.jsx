@@ -163,7 +163,7 @@ export default function Notes() {
             />
             <span className="text-xs text-muted-foreground">
               <Upload className="mr-1 inline h-3 w-3" />
-              .txt, .md, .csv, .pdf · max 2MB · stored as a note + summarized
+              .txt, .md, .csv, .pdf · max 1MB (more on Paid) · stored as a note + summarized
             </span>
           </div>
           {upload?.loading && <p className="text-sm text-muted-foreground">Uploading &amp; summarizing…</p>}
