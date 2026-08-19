@@ -10,6 +10,7 @@ import {
   BarChart3,
   Search,
   Settings as SettingsIcon,
+  Shield,
   Moon,
   Sun,
   LogOut,
@@ -33,10 +34,13 @@ const nav = [
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/search', label: 'Search', icon: Search },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
+  { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  // The Admin entry only renders for admins; everyone else never sees the link.
+  const navItems = nav.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
   const { theme, toggle } = useTheme();
   const { notifications, unread, markAllRead } = useNotifications();
   const navigate = useNavigate();
@@ -59,7 +63,7 @@ export default function Layout() {
       <aside className="hidden w-60 flex-col border-r bg-card p-4 md:flex">
         <div className="mb-6 px-2 text-lg font-bold tracking-tight">Productivity</div>
         <nav className="flex flex-1 flex-col gap-1">
-          {nav.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -120,7 +124,7 @@ export default function Layout() {
 
         {/* Mobile navigation: the sidebar is hidden < md, so expose a scrollable nav row. */}
         <nav className="flex gap-1 overflow-x-auto border-b bg-card px-2 py-2 md:hidden">
-          {nav.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

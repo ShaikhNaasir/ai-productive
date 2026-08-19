@@ -175,7 +175,11 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   Every mutation writes an `AdminAuditLog` row (no FK, survives hard-deletes).
   `UserStatus` gains `DELETED`; auth blocklists DISABLED/DELETED. Tests: `admin.test.js`
   +8. Server 209 green, lint clean. `db push`: `admin_audit_logs` table, `UserStatus.DELETED`.
-- [ ] **D4 — Admin client.** `/admin` dashboard, users table, per-user drill-down,
-  audit log; `ProtectedRoute` gated on `role === 'ADMIN'`; admin-only nav link.
+- [x] **D4 — Admin client.** `adminService` + `AdminRoute` (role-gated) + admin-only
+  `Shield` nav link. Pages: `/admin` dashboard (metric tiles), `/admin/users`
+  (table, search + status filter, pagination, row → detail), `/admin/users/:id`
+  (metadata + counts + moderation buttons with confirms: disable/enable, force-logout,
+  grant/revoke admin, set plan, soft/hard delete), `/admin/audit` (paginated trail).
+  Tests: `adminPanel.test.jsx` (4). Client 45 green, lint clean, build OK.
 - [ ] **D5 (later) — SaaS billing.** Payment provider (Stripe/Razorpay), plan
   upgrades + webhooks, paid-tier gating. Separate epic; provider TBD.

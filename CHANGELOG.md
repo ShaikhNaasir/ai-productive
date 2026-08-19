@@ -66,6 +66,38 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Admin panel (Roadmap Tier D).** A role-gated admin surface for monitoring all
+  registered users — **metadata and aggregate counts only, never private content**
+  (task titles, note bodies, etc.). Built custom in the existing stack (a library
+  such as AdminJS / react-admin would auto-expose row content and violate that
+  invariant). Four slices:
+  - *D1 — Roles + guard.* `Role` (USER/ADMIN) and `UserStatus` (ACTIVE/DISABLED) on
+    `User`; a `requireAdmin` middleware; `requireAuth` loads the role and blocks
+    disabled accounts (403 everywhere, including login). Admins are bootstrapped from
+    an `ADMIN_EMAILS` env allow-list (promote-on-login / on-register; never
+    auto-demote). Auth responses now carry `user.role`.
+  - *D2 — Read API.* `GET /api/admin/metrics` (user totals, 7/30-day signups,
+    active-today, disabled, plan split, content counts, AI spend), `GET /api/admin/users`
+    (paginated, filterable by search / role / status / plan, metadata-only projection),
+    and `GET /api/admin/users/:id` (per-user counts + AI aggregate). Adds `User.plan`
+    (FREE/PAID scaffold), `planRenewsAt`, and a throttled `lastActiveAt` stamp.
+  - *D3 — Moderation + audit.* `POST /users/:id/disable|enable|force-logout|role|plan`
+    and `DELETE /users/:id` (soft by default → `status=DELETED` retaining data; `hard:true`
+    removes the row and cascades). Disable / delete / force-logout bump `tokenVersion`
+    and drop live sockets. Guards prevent self-disable / self-delete / self-revoke and
+    removing the last active admin. Every mutation writes an `AdminAuditLog` row (no FK,
+    survives hard-deletes); `GET /audit` lists the trail. `UserStatus` gains `DELETED`;
+    auth blocklists DISABLED/DELETED.
+  - *D4 — Admin client.* An `/admin` React surface behind an `AdminRoute` role guard
+    with an admin-only nav link: a dashboard of metric tiles, a users table (search +
+    status filter, pagination, row → detail), a per-user drill-down (metadata + counts +
+    moderation buttons with confirmations), and a paginated audit log.
+
+  Suites: server Jest **209**, client Vitest **45**; lint clean; client build OK. New
+  schema applied via `prisma db push` on deploy: `users.role` / `status` / `plan` /
+  `planRenewsAt` / `lastActiveAt`, the `admin_audit_logs` table, and `UserStatus.DELETED`.
+  **Ops:** set `ADMIN_EMAILS` on the `productivity-api` Render service (the repo is
+  public, so the real admin email lives only in the untracked env, never in source).
 - **Focus timer robustness.** The Pomodoro timer now supports **pause/resume**
   and **custom durations** (1–180 min) alongside the 25/15/5 presets, and
   **recovers a running session** after a reload or navigating away: sessions
