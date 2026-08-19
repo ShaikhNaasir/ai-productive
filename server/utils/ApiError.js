@@ -29,6 +29,9 @@ class ApiError extends Error {
   static paymentRequired(msg = 'Payment required', details) {
     return new ApiError(402, msg, details);
   }
+  static tooManyRequests(msg = 'Too many requests') {
+    return new ApiError(429, msg);
+  }
   static serviceUnavailable(msg = 'Service unavailable') {
     return new ApiError(503, msg);
   }

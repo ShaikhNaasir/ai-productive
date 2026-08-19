@@ -228,9 +228,15 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   inline edit + delete (the API already supported it; only the UI was read-only);
   reminder `recurrence` is now surfaced in the calendar feed so it can be edited.
   Tests: server +1, client +2. Server Jest 241, client Vitest 57 green; lint + build OK.
-- [ ] **F2 — Auth hardening.** Email change (`PATCH /auth/profile`) resets
-  `emailVerified` + re-sends; per-user resend cooldown; per-account throttle on
-  `/auth/2fa/login`; encrypt the TOTP secret at rest.
+- [x] **F2 — Auth hardening.** Email change (`PATCH /auth/profile`) now resets
+  `emailVerified` (unless the new address is an allowlisted admin) and re-sends the
+  verification link — closing a gap where a verified user could switch to an unowned
+  address and stay verified. `POST /auth/resend-verification` enforces a 60s per-user
+  cooldown (429). `POST /auth/2fa/login` gained a per-account failed-attempt throttle
+  (5 / 15 min → 429), on top of the IP + global limiters. The TOTP secret is now
+  encrypted at rest (AES-256-GCM, `services/secretCrypto.js`, key derived from
+  `JWT_SECRET` or `TWO_FACTOR_ENC_KEY`; legacy plaintext still readable). Tests:
+  server +3. Server Jest 244 green; lint clean.
 - [ ] **F3 — Cleanup.** One-time gate on the email-verify grandfather backfill;
   backfill missing tests (verify-expired, billing webhook downgrade, 2FA disable via
   backup, challenge-purpose rejection); register "check your email" confirmation UI.

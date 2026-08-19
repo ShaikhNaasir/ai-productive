@@ -10,6 +10,7 @@ jest.mock('../models/prisma', () => {
 
 const request = require('supertest');
 const createApp = require('../app');
+const prisma = require('../models/prisma');
 
 const app = createApp();
 
@@ -45,11 +46,33 @@ describe('email verification (E1)', () => {
     expect(res.status).toBe(400);
   });
 
-  test('resend returns success for an unverified user', async () => {
+  test('resend is throttled right after registration (cooldown)', async () => {
     const reg = await register('resend@b.com');
+    const res = await request(app).post('/api/auth/resend-verification').set(bearer(reg.body.token));
+    expect(res.status).toBe(429);
+  });
+
+  test('resend succeeds once the cooldown has passed', async () => {
+    const reg = await register('resend2@b.com');
+    // Clear the last-send marker to simulate the cooldown having elapsed.
+    await prisma.user.update({ where: { id: reg.body.user.id }, data: { emailVerifyExpires: null } });
     const res = await request(app).post('/api/auth/resend-verification').set(bearer(reg.body.token));
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  test('changing email marks the account unverified again and re-sends', async () => {
+    const reg = await register('changer@b.com');
+    const token = tokenFromUrl(reg.body.verification.devVerifyUrl);
+    await request(app).post('/api/auth/verify-email').send({ token }); // now verified
+
+    const res = await request(app)
+      .patch('/api/auth/profile')
+      .set(bearer(reg.body.token))
+      .send({ email: 'changed@b.com' });
+    expect(res.status).toBe(200);
+    expect(res.body.user.email).toBe('changed@b.com');
+    expect(res.body.user.emailVerified).toBe(false);
   });
 
   test('an allowlisted admin registers already verified (no email sent)', async () => {

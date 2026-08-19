@@ -74,4 +74,4 @@ async function grandfatherExisting() {
   return count;
 }
 
-module.exports = { issue, sendVerification, verify, hashToken, grandfatherExisting };
+module.exports = { issue, sendVerification, verify, hashToken, grandfatherExisting, TOKEN_TTL_MS };

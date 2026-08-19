@@ -10,6 +10,7 @@ const ApiError = require('../utils/ApiError');
 const emailVerification = require('../services/emailVerification');
 const totp = require('../services/totp');
 const twoFactor = require('../services/twoFactor');
+const secretCrypto = require('../services/secretCrypto');
 const {
   registerSchema,
   loginSchema,
@@ -22,6 +23,37 @@ const {
 
 const SALT_ROUNDS = 10;
 const CHALLENGE_TTL = '5m'; // window to complete the 2FA step after password
+const RESEND_COOLDOWN_MS = 60 * 1000; // min gap between verification emails per user
+
+// In-memory per-account throttle for the 2FA login step (defence-in-depth on top of
+// the global + auth IP limiters). Single instance on Render, so a Map is enough;
+// it resets on restart, which is fine for brute-force mitigation.
+const TFA_MAX_FAILURES = 5;
+const TFA_WINDOW_MS = 15 * 60 * 1000;
+const tfaFailures = new Map(); // userId → { count, firstAt }
+
+function tfaLocked(userId) {
+  const rec = tfaFailures.get(userId);
+  if (!rec) return false;
+  if (Date.now() - rec.firstAt > TFA_WINDOW_MS) {
+    tfaFailures.delete(userId);
+    return false;
+  }
+  return rec.count >= TFA_MAX_FAILURES;
+}
+
+function tfaRecordFailure(userId) {
+  const rec = tfaFailures.get(userId);
+  if (!rec || Date.now() - rec.firstAt > TFA_WINDOW_MS) {
+    tfaFailures.set(userId, { count: 1, firstAt: Date.now() });
+  } else {
+    rec.count += 1;
+  }
+}
+
+function tfaReset(userId) {
+  tfaFailures.delete(userId);
+}
 
 // A real hash to compare against when the email is unknown, so a miss costs the same
 // bcrypt work as a wrong password. Without it, response timing leaks which addresses
@@ -158,18 +190,28 @@ async function me(req, res) {
 
 async function updateProfile(req, res) {
   const data = updateProfileSchema.parse(req.body);
+  const current = await prisma.user.findUnique({ where: { id: req.user.id } });
 
+  let emailChanged = false;
   if (data.email) {
     const existing = await prisma.user.findUnique({ where: { email: data.email } });
     if (existing && existing.id !== req.user.id) {
       throw ApiError.conflict('Email already in use');
     }
+    emailChanged = data.email.toLowerCase() !== current.email.toLowerCase();
+    if (emailChanged) {
+      // A changed email is unverified again (unless it's an allowlisted admin address).
+      // Otherwise a verified user could move to an address they don't own and stay verified.
+      data.emailVerified = isAdminEmail(data.email);
+    }
   }
 
-  const user = await prisma.user.update({
-    where: { id: req.user.id },
-    data,
-  });
+  const user = await prisma.user.update({ where: { id: req.user.id }, data });
+
+  // Send a fresh verification link to the new address (best-effort).
+  if (emailChanged && !user.emailVerified) {
+    await emailVerification.sendVerification(user);
+  }
   res.json({ user: serializeUser(user) });
 }
 
@@ -221,6 +263,14 @@ async function resendVerification(req, res) {
   if (user.emailVerified) {
     return res.json({ success: true, alreadyVerified: true });
   }
+  // Cooldown: the last send time is the token's expiry minus its TTL. Refuse a resend
+  // within RESEND_COOLDOWN_MS so the endpoint can't be used to spam email.
+  if (user.emailVerifyExpires) {
+    const lastSent = new Date(user.emailVerifyExpires).getTime() - emailVerification.TOKEN_TTL_MS;
+    if (Date.now() - lastSent < RESEND_COOLDOWN_MS) {
+      throw ApiError.tooManyRequests('Please wait a moment before requesting another email.');
+    }
+  }
   const verification = await emailVerification.sendVerification(user);
   res.json({ success: true, verification });
 }
@@ -235,7 +285,12 @@ async function setupTwoFactor(req, res) {
     throw ApiError.badRequest('Two-factor auth is already enabled.');
   }
   const secret = totp.generateSecret();
-  await prisma.user.update({ where: { id: user.id }, data: { twoFactorPendingSecret: secret } });
+  // Store the secret encrypted at rest; the plaintext only leaves in this response
+  // (for the QR the user scans now) and is never persisted in the clear.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { twoFactorPendingSecret: secretCrypto.encrypt(secret) },
+  });
 
   const otpauthUrl = totp.otpauthURL(secret, user.email);
   const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
@@ -253,7 +308,7 @@ async function enableTwoFactor(req, res) {
   if (!user.twoFactorPendingSecret) {
     throw ApiError.badRequest('Start setup first.');
   }
-  if (!totp.verify(user.twoFactorPendingSecret, code)) {
+  if (!totp.verify(secretCrypto.decrypt(user.twoFactorPendingSecret), code)) {
     throw ApiError.badRequest('That code is incorrect. Try again.');
   }
 
@@ -262,6 +317,7 @@ async function enableTwoFactor(req, res) {
     where: { id: user.id },
     data: {
       twoFactorEnabled: true,
+      // Already encrypted as the pending secret — just promote it.
       twoFactorSecret: user.twoFactorPendingSecret,
       twoFactorPendingSecret: null,
       twoFactorBackupCodes: hashes,
@@ -279,7 +335,7 @@ async function disableTwoFactor(req, res) {
     throw ApiError.badRequest('Two-factor auth is not enabled.');
   }
   const ok =
-    totp.verify(user.twoFactorSecret, code) ||
+    totp.verify(secretCrypto.decrypt(user.twoFactorSecret), code) ||
     twoFactor.consumeBackupCode(user.twoFactorBackupCodes, code) !== null;
   if (!ok) {
     throw ApiError.badRequest('That code is incorrect.');
@@ -318,18 +374,25 @@ async function loginTwoFactor(req, res) {
   if (user.status === 'DISABLED' || user.status === 'DELETED') {
     throw ApiError.forbidden('This account is not active.');
   }
+  // Per-account throttle: too many wrong codes locks the second-factor step briefly.
+  if (tfaLocked(user.id)) {
+    throw ApiError.tooManyRequests('Too many attempts. Please wait a few minutes and try again.');
+  }
 
-  if (totp.verify(user.twoFactorSecret, code)) {
+  if (totp.verify(secretCrypto.decrypt(user.twoFactorSecret), code)) {
+    tfaReset(user.id);
     return res.json({ user: serializeUser(user), token: issueToken(user) });
   }
   const remaining = twoFactor.consumeBackupCode(user.twoFactorBackupCodes, code);
   if (remaining) {
+    tfaReset(user.id);
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: { twoFactorBackupCodes: remaining },
     });
     return res.json({ user: serializeUser(updated), token: issueToken(updated) });
   }
+  tfaRecordFailure(user.id);
   throw ApiError.unauthorized('That code is incorrect.');
 }
 

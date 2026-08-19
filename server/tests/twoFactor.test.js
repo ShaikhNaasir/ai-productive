@@ -8,6 +8,7 @@ jest.mock('../models/prisma', () => {
 const request = require('supertest');
 const createApp = require('../app');
 const totp = require('../services/totp');
+const prisma = require('../models/prisma');
 
 const app = createApp();
 
@@ -29,11 +30,14 @@ describe('totp algorithm', () => {
 
 describe('two-factor enrollment + login (E2)', () => {
   let token;
+  let userId;
   let secret;
   let backupCodes;
 
   beforeAll(async () => {
-    token = (await register('tfa@b.com')).body.token;
+    const reg = await register('tfa@b.com');
+    token = reg.body.token;
+    userId = reg.body.user.id;
   });
 
   test('setup returns a secret and a scannable QR', async () => {
@@ -58,6 +62,11 @@ describe('two-factor enrollment + login (E2)', () => {
 
     const me = await request(app).get('/api/auth/me').set(bearer(token));
     expect(me.body.user.twoFactorEnabled).toBe(true);
+
+    // The secret is stored encrypted at rest, not as the raw base32 value.
+    const row = await prisma.user.findUnique({ where: { id: userId } });
+    expect(row.twoFactorSecret).not.toBe(secret);
+    expect(row.twoFactorSecret.startsWith('v1:')).toBe(true);
   });
 
   test('login now demands a second factor instead of a token', async () => {
@@ -109,5 +118,24 @@ describe('two-factor enrollment + login (E2)', () => {
     const relog = await login('tfa@b.com');
     expect(relog.body.token).toBeTruthy();
     expect(relog.body.twoFactorRequired).toBeUndefined();
+  });
+});
+
+describe('two-factor login throttle (F2)', () => {
+  test('too many wrong codes lock the 2FA step with 429', async () => {
+    const reg = await register('tfa-throttle@b.com');
+    const setup = (await request(app).post('/api/auth/2fa/setup').set(bearer(reg.body.token))).body;
+    await request(app).post('/api/auth/2fa/enable').set(bearer(reg.body.token)).send({ code: codeFor(setup.secret) });
+
+    // Five wrong attempts are rejected as 401 …
+    for (let i = 0; i < 5; i += 1) {
+      const challenge = (await login('tfa-throttle@b.com')).body.challengeToken;
+      const res = await request(app).post('/api/auth/2fa/login').send({ challengeToken: challenge, code: '000000' });
+      expect(res.status).toBe(401);
+    }
+    // … the sixth is locked out with 429.
+    const challenge = (await login('tfa-throttle@b.com')).body.challengeToken;
+    const locked = await request(app).post('/api/auth/2fa/login').send({ challengeToken: challenge, code: '000000' });
+    expect(locked.status).toBe(429);
   });
 });

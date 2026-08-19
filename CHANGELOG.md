@@ -18,6 +18,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **Auth hardening (F2).** Four fixes on the account/auth surface:
+  - Changing your email (`PATCH /api/auth/profile`) now resets `emailVerified` and
+    re-sends verification (unless the new address is an allowlisted admin) — a verified
+    user can no longer switch to an address they don't own and remain verified.
+  - `POST /api/auth/resend-verification` enforces a 60-second per-user cooldown (429)
+    so it can't be used to spam email.
+  - `POST /api/auth/2fa/login` gained a per-account throttle (5 failed codes / 15 min
+    → 429), layered on top of the IP and global limiters.
+  - The TOTP secret is encrypted at rest (AES-256-GCM; key derived from `JWT_SECRET`,
+    overridable with `TWO_FACTOR_ENC_KEY`), instead of being stored in the clear.
 - **Global API rate limiter.** Every `/api/*` route is now behind a coarse per-client
   cap (`apiLimiter`, default 200 req/min, `API_RATE_LIMIT_MAX`), keyed by user id when
   authenticated and IP otherwise. The stricter auth (`/api/auth`) and per-user AI
