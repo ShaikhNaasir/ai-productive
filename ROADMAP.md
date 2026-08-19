@@ -219,3 +219,18 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   `User.twoFactorEnabled`/`twoFactorSecret`/`twoFactorPendingSecret`/`twoFactorBackupCodes`.
   New dep: `qrcode` (server, QR only). Tests: server +9, client +2. Server Jest 240,
   client Vitest 55 green; lint + build OK.
+
+## Tier F — Hardening & polish
+
+- [x] **F1 — Global rate limiting + Calendar edit/delete.** A coarse per-client
+  `apiLimiter` (default 200 req/min, keyed by user id or IP) now fronts every `/api/*`
+  route, not just auth + AI (webhook exempt). Calendar schedules/reminders gained
+  inline edit + delete (the API already supported it; only the UI was read-only);
+  reminder `recurrence` is now surfaced in the calendar feed so it can be edited.
+  Tests: server +1, client +2. Server Jest 241, client Vitest 57 green; lint + build OK.
+- [ ] **F2 — Auth hardening.** Email change (`PATCH /auth/profile`) resets
+  `emailVerified` + re-sends; per-user resend cooldown; per-account throttle on
+  `/auth/2fa/login`; encrypt the TOTP secret at rest.
+- [ ] **F3 — Cleanup.** One-time gate on the email-verify grandfather backfill;
+  backfill missing tests (verify-expired, billing webhook downgrade, 2FA disable via
+  backup, challenge-purpose rejection); register "check your email" confirmation UI.

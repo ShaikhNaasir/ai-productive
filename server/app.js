@@ -11,7 +11,7 @@ const config = require('./config/env');
 const routes = require('./routes');
 const asyncHandler = require('./utils/asyncHandler');
 const billingController = require('./controllers/billing.controller');
-const { authLimiter } = require('./middleware/rateLimit');
+const { authLimiter, apiLimiter } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/error');
 const { requestContext } = require('./middleware/requestContext');
 
@@ -43,7 +43,10 @@ function createApp() {
 
   if (!config.isTest) {
     app.use(morgan('dev'));
-    // Throttle auth endpoints to slow brute-force attempts (disabled in tests).
+    // Coarse per-client cap across the whole API, then a stricter cap on auth
+    // endpoints (both disabled in tests so suites can fire freely). The Razorpay
+    // webhook is mounted earlier, so it is not rate-limited here.
+    app.use('/api', apiLimiter);
     app.use('/api/auth', authLimiter);
   }
 

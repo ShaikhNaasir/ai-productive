@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { calendarService, scheduleService, reminderService } from '@/services/calendarService';
 import { apiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,13 @@ import { formatDate } from '@/lib/utils';
 
 const typeVariant = { task: 'medium', schedule: 'default', reminder: 'secondary' };
 const RECURRENCES = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
+
+// ISO date → a value the datetime-local input accepts (local time, no seconds).
+function toLocalInput(date) {
+  const d = new Date(date);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function groupByDay(events) {
   const groups = {};
@@ -27,6 +34,10 @@ export default function Calendar() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ title: '', startTime: '' });
   const [reminder, setReminder] = useState({ message: '', remindAt: '', recurrence: 'NONE' });
+  // Inline edit of an existing schedule/reminder item.
+  const [editing, setEditing] = useState(null); // { id, type }
+  const [editForm, setEditForm] = useState({ title: '', when: '', recurrence: 'NONE' });
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +78,54 @@ export default function Calendar() {
       load();
     } catch (err) {
       setError(apiError(err, 'Failed to add reminder'));
+    }
+  };
+
+  const startEdit = (e) => {
+    setError('');
+    setEditing({ id: e.id, type: e.type });
+    setEditForm({ title: e.title, when: toLocalInput(e.date), recurrence: e.meta?.recurrence || 'NONE' });
+  };
+
+  const cancelEdit = () => setEditing(null);
+
+  const saveEdit = async (ev) => {
+    ev.preventDefault();
+    if (!editForm.title.trim() || !editForm.when) return;
+    setBusy(true);
+    setError('');
+    try {
+      const when = new Date(editForm.when).toISOString();
+      if (editing.type === 'schedule') {
+        await scheduleService.update(editing.id, { title: editForm.title, startTime: when });
+      } else {
+        await reminderService.update(editing.id, {
+          message: editForm.title,
+          remindAt: when,
+          recurrence: editForm.recurrence,
+        });
+      }
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(apiError(err, 'Failed to save changes'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const del = async (e) => {
+    if (!window.confirm(`Delete this ${e.type}?`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (e.type === 'schedule') await scheduleService.remove(e.id);
+      else await reminderService.remove(e.id);
+      await load();
+    } catch (err) {
+      setError(apiError(err, 'Failed to delete'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -174,22 +233,102 @@ export default function Calendar() {
                 <CardTitle className="text-base">{day}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {dayEvents.map((e) => (
-                  <div key={`${e.type}-${e.id}`} className="flex items-center justify-between border-b pb-2 last:border-0">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={typeVariant[e.type]}>{e.type}</Badge>
-                      <span className="text-sm">{e.title}</span>
-                      {e.type === 'schedule' && e.meta?.googleEventId && (
-                        <Badge variant="outline">Synced</Badge>
-                      )}
+                {dayEvents.map((e) => {
+                  const isEditing = editing && editing.id === e.id && editing.type === e.type;
+                  // Only schedules and reminders are created (and thus editable) here;
+                  // task deadlines are managed on the Tasks page.
+                  const editable = e.type === 'schedule' || e.type === 'reminder';
+
+                  if (isEditing) {
+                    return (
+                      <form
+                        key={`${e.type}-${e.id}`}
+                        onSubmit={saveEdit}
+                        className="flex flex-wrap items-end gap-2 border-b pb-3 last:border-0"
+                      >
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs" htmlFor={`edit-title-${e.id}`}>
+                            {e.type === 'reminder' ? 'Reminder' : 'Title'}
+                          </Label>
+                          <Input
+                            id={`edit-title-${e.id}`}
+                            value={editForm.title}
+                            onChange={(ev) => setEditForm({ ...editForm, title: ev.target.value })}
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs" htmlFor={`edit-when-${e.id}`}>When</Label>
+                          <Input
+                            id={`edit-when-${e.id}`}
+                            type="datetime-local"
+                            value={editForm.when}
+                            onChange={(ev) => setEditForm({ ...editForm, when: ev.target.value })}
+                            className="h-9"
+                          />
+                        </div>
+                        {e.type === 'reminder' && (
+                          <div className="space-y-1">
+                            <Label className="text-xs" htmlFor={`edit-rec-${e.id}`}>Repeat</Label>
+                            <select
+                              id={`edit-rec-${e.id}`}
+                              value={editForm.recurrence}
+                              onChange={(ev) => setEditForm({ ...editForm, recurrence: ev.target.value })}
+                              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                            >
+                              {RECURRENCES.map((r) => (
+                                <option key={r} value={r}>{r === 'NONE' ? 'No repeat' : r}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Button type="submit" size="sm" disabled={busy}>Save</Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+                        </div>
+                      </form>
+                    );
+                  }
+
+                  return (
+                    <div key={`${e.type}-${e.id}`} className="flex items-center justify-between border-b pb-2 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={typeVariant[e.type]}>{e.type}</Badge>
+                        <span className="text-sm">{e.title}</span>
+                        {e.type === 'schedule' && e.meta?.googleEventId && (
+                          <Badge variant="outline">Synced</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {/* All-day events have no meaningful clock time — showing one
+                              (e.g. midnight rendered in local tz) is misleading. */}
+                          {formatDate(e.date, { withTime: !(e.type === 'schedule' && e.meta?.allDay) })}
+                        </span>
+                        {editable && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(e)}
+                              className="text-muted-foreground hover:text-foreground"
+                              aria-label={`Edit ${e.type}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => del(e)}
+                              className="text-muted-foreground hover:text-destructive"
+                              aria-label={`Delete ${e.type}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {/* All-day events have no meaningful clock time — showing one
-                          (e.g. midnight rendered in local tz) is misleading. */}
-                      {formatDate(e.date, { withTime: !(e.type === 'schedule' && e.meta?.allDay) })}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           ))}

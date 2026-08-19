@@ -14,6 +14,19 @@ const authLimiter = rateLimit({
   message: { error: { message: 'Too many attempts. Please try again later.' } },
 });
 
+// Coarse safety net across the whole API so no single client can flood any endpoint
+// (the per-user AI limiter and the auth limiter still apply stricter caps on top).
+// Keyed by user id once authenticated, otherwise by IP. Generous by default; tune
+// with API_RATE_LIMIT_MAX.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: parseInt(process.env.API_RATE_LIMIT_MAX || '200', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user && req.user.id ? req.user.id : req.ip),
+  message: { error: { message: 'Too many requests. Please slow down and try again shortly.' } },
+});
+
 // Caps AI calls per authenticated user so a single account (or a stolen token)
 // can't spam the paid LLM endpoints. Keyed by user id (routes run after requireAuth).
 // The window ceiling is plan-aware: PAID users get a higher burst allowance. An
@@ -54,4 +67,4 @@ async function enforceAiBudget(req, res, next) {
   }
 }
 
-module.exports = { authLimiter, aiLimiter, enforceAiBudget };
+module.exports = { authLimiter, apiLimiter, aiLimiter, enforceAiBudget };

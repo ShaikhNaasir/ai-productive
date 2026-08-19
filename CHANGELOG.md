@@ -8,7 +8,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Calendar events and reminders are now editable and deletable.** The Calendar
+  view previously rendered created schedules and reminders read-only even though the
+  API (`PATCH`/`DELETE /api/schedules/:id` and `/api/reminders/:id`) already supported
+  it. Each schedule/reminder row now has inline edit (title/time, plus repeat for
+  reminders) and delete (with confirm). Task deadlines stay managed on the Tasks page.
+
 ### Security
+
+- **Global API rate limiter.** Every `/api/*` route is now behind a coarse per-client
+  cap (`apiLimiter`, default 200 req/min, `API_RATE_LIMIT_MAX`), keyed by user id when
+  authenticated and IP otherwise. The stricter auth (`/api/auth`) and per-user AI
+  (`/api/ai`) limiters still apply on top; the Razorpay webhook is exempt. Previously
+  only auth and AI endpoints were throttled.
 
 - **Security hardening (P1–P3).** A security review (no critical vulnerabilities
   found — userId scoping / IDOR clean, raw SQL safe, secrets gitignored) drove
