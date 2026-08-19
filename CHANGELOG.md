@@ -10,6 +10,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Registration now confirms "check your email"** when a verification email was
+  actually sent (skipped for admins and when email delivery isn't configured), instead
+  of dropping straight to the dashboard.
+- **Email-verify grandfather backfill runs once, not on every boot.** It's gated by an
+  `app_settings` flag now, rather than re-running an idempotent sweep on each start.
 - **Calendar events and reminders are now editable and deletable.** The Calendar
   view previously rendered created schedules and reminders read-only even though the
   API (`PATCH`/`DELETE /api/schedules/:id` and `/api/reminders/:id`) already supported

@@ -62,7 +62,9 @@ export function AuthProvider({ children }) {
     const data = await authService.register(payload);
     setToken(data.token);
     setUser(data.user);
-    return data.user;
+    // Return the full payload so the caller can show a "check your email" step when a
+    // verification email actually went out.
+    return data;
   }, []);
 
   const logout = useCallback(async () => {

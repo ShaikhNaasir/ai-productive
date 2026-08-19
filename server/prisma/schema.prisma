@@ -315,6 +315,17 @@ model Reminder {
   @@map("reminders")
 }
 
+// Small key/value store for one-off app state (Roadmap F3) — e.g. the flag marking
+// that the email-verification grandfather backfill has already run, so it doesn't
+// re-run on every boot.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
 // Razorpay webhook ledger (Roadmap D5). One row per delivered event, keyed by the
 // provider's event id so a redelivered webhook is processed at most once
 // (idempotency). No FK: the row is an immutable audit fact, kept even if the user

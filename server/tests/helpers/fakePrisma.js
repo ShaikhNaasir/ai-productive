@@ -40,6 +40,7 @@ const modelDefaults = {
   },
   adminAuditLogs: { targetUserId: null, meta: null },
   billingEvents: { userId: null, payload: null },
+  appSettings: {},
 };
 
 function matchCondition(value, cond) {
@@ -264,6 +265,7 @@ function createFakePrisma() {
     googleAccount: makeModel('googleAccounts'),
     adminAuditLog: makeModel('adminAuditLogs'),
     billingEvent: makeModel('billingEvents'),
+    appSetting: makeModel('appSettings'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},

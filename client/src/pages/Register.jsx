@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, MailCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { apiError } from '@/lib/api';
 import AuthLayout from '@/components/AuthLayout';
@@ -17,20 +17,53 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [sentTo, setSentTo] = useState('');
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await register(form);
-      navigate('/', { replace: true });
+      const data = await register(form);
+      // Only promise "check your email" when a verification email was actually sent
+      // (not for admins, and not when email delivery isn't configured).
+      if (data?.verification?.delivery === 'sent') {
+        setSentTo(data.user.email);
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err) {
       setError(apiError(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }
   };
+
+  if (sentTo) {
+    return (
+      <AuthLayout>
+        <Card className="w-full border-0 shadow-lg sm:border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <MailCheck className="h-6 w-6" /> Check your email
+            </CardTitle>
+            <CardDescription>
+              We sent a verification link to <span className="font-medium">{sentTo}</span>. Click it to
+              activate your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Didn&apos;t get it? Check spam, or resend it from the banner once you continue.
+            </p>
+            <Button className="w-full" onClick={() => navigate('/', { replace: true })}>
+              Continue to app
+            </Button>
+          </CardContent>
+        </Card>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout>

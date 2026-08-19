@@ -11,6 +11,7 @@ jest.mock('../models/prisma', () => {
 const request = require('supertest');
 const createApp = require('../app');
 const prisma = require('../models/prisma');
+const emailVerification = require('../services/emailVerification');
 
 const app = createApp();
 
@@ -44,6 +45,25 @@ describe('email verification (E1)', () => {
   test('an invalid token is rejected', async () => {
     const res = await request(app).post('/api/auth/verify-email').send({ token: 'not-a-real-token' });
     expect(res.status).toBe(400);
+  });
+
+  test('an expired token is rejected', async () => {
+    const reg = await register('expired@b.com');
+    const token = tokenFromUrl(reg.body.verification.devVerifyUrl);
+    await prisma.user.update({ where: { id: reg.body.user.id }, data: { emailVerifyExpires: new Date(Date.now() - 1000) } });
+    const res = await request(app).post('/api/auth/verify-email').send({ token });
+    expect(res.status).toBe(400);
+  });
+
+  test('the grandfather backfill runs once, then no-ops', async () => {
+    // A legacy-style account: unverified with no pending token.
+    await prisma.user.create({
+      data: { email: 'legacy@b.com', passwordHash: 'x', emailVerified: false, emailVerifyTokenHash: null },
+    });
+    const first = await emailVerification.grandfatherExisting();
+    expect(first).toBeGreaterThanOrEqual(1);
+    const second = await emailVerification.grandfatherExisting();
+    expect(second).toBe(0);
   });
 
   test('resend is throttled right after registration (cooldown)', async () => {

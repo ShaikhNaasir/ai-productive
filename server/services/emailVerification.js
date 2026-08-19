@@ -61,16 +61,22 @@ async function verify(rawToken) {
   });
 }
 
+const GRANDFATHER_FLAG = 'emailVerifyGrandfathered';
+
 // One-time grandfather: mark pre-existing accounts as verified so rolling the
 // feature out doesn't nag or lock out current users. A brand-new unverified account
 // always has a pending token hash (issued at register), so it is never swept in;
 // only accounts that predate the feature (unverified, no token) are grandfathered.
-// Idempotent: after the first run there are no such rows.
+// Gated by an AppSetting flag so it runs exactly once, not on every boot.
 async function grandfatherExisting() {
+  const done = await prisma.appSetting.findUnique({ where: { key: GRANDFATHER_FLAG } });
+  if (done) return 0;
+
   const { count } = await prisma.user.updateMany({
     where: { emailVerified: false, emailVerifyTokenHash: null },
     data: { emailVerified: true },
   });
+  await prisma.appSetting.create({ data: { key: GRANDFATHER_FLAG, value: new Date().toISOString() } });
   return count;
 }
 

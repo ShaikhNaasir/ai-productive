@@ -237,6 +237,10 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   encrypted at rest (AES-256-GCM, `services/secretCrypto.js`, key derived from
   `JWT_SECRET` or `TWO_FACTOR_ENC_KEY`; legacy plaintext still readable). Tests:
   server +3. Server Jest 244 green; lint clean.
-- [ ] **F3 — Cleanup.** One-time gate on the email-verify grandfather backfill;
-  backfill missing tests (verify-expired, billing webhook downgrade, 2FA disable via
-  backup, challenge-purpose rejection); register "check your email" confirmation UI.
+- [x] **F3 — Cleanup.** The email-verify grandfather backfill is now gated by an
+  `AppSetting` flag (`app_settings` table) so it runs exactly once, not on every boot.
+  Register shows a "check your email" confirmation when a verification email was
+  actually sent (skipped for admins / when email is off). Test-coverage backfill:
+  verify-expired token, grandfather run-once, billing webhook downgrade, 2FA disable
+  via backup code, and 2FA challenge-purpose rejection. Tests: server +5, client +1.
+  Server Jest 249, client Vitest 58 green; lint + build OK. Schema: `app_settings`.

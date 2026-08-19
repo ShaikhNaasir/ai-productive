@@ -127,4 +127,26 @@ describe('razorpay webhook', () => {
     expect(again.status).toBe(200);
     expect(again.body.deduped).toBe(true);
   });
+
+  test('a signed subscription.cancelled with no remaining period downgrades to FREE', async () => {
+    const { body } = await register('bcancel@b.com');
+    await prisma.user.update({
+      where: { id: body.user.id },
+      data: { razorpaySubscriptionId: 'sub_cancel', plan: 'PAID' },
+    });
+
+    const pastEnd = Math.floor((Date.now() - 30 * 86400000) / 1000);
+    const raw = JSON.stringify({
+      event: 'subscription.cancelled',
+      payload: { subscription: { entity: { id: 'sub_cancel', status: 'cancelled', current_end: pastEnd } } },
+    });
+    const res = await request(app)
+      .post('/api/billing/webhook')
+      .set({ 'Content-Type': 'application/json', 'x-razorpay-signature': sign(raw), 'x-razorpay-event-id': 'evt_cancel_1' })
+      .send(raw);
+    expect(res.status).toBe(200);
+
+    const downgraded = await prisma.user.findUnique({ where: { id: body.user.id } });
+    expect(downgraded.plan).toBe('FREE');
+  });
 });

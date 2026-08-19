@@ -139,3 +139,28 @@ describe('two-factor login throttle (F2)', () => {
     expect(locked.status).toBe(429);
   });
 });
+
+describe('two-factor edge cases (F3)', () => {
+  test('disable also accepts a backup code', async () => {
+    const reg = await register('tfa-backup@b.com');
+    const setup = (await request(app).post('/api/auth/2fa/setup').set(bearer(reg.body.token))).body;
+    const enable = await request(app).post('/api/auth/2fa/enable').set(bearer(reg.body.token)).send({ code: codeFor(setup.secret) });
+
+    const res = await request(app)
+      .post('/api/auth/2fa/disable')
+      .set(bearer(reg.body.token))
+      .send({ code: enable.body.backupCodes[0] });
+    expect(res.status).toBe(200);
+
+    const me = await request(app).get('/api/auth/me').set(bearer(reg.body.token));
+    expect(me.body.user.twoFactorEnabled).toBe(false);
+  });
+
+  test('a normal session token cannot be used as a 2FA challenge', async () => {
+    const reg = await register('tfa-nochallenge@b.com');
+    const res = await request(app)
+      .post('/api/auth/2fa/login')
+      .send({ challengeToken: reg.body.token, code: '123456' });
+    expect(res.status).toBe(401);
+  });
+});
