@@ -41,6 +41,18 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (credentials) => {
     const data = await authService.login(credentials);
+    // 2FA-enabled accounts get a challenge instead of a session; the caller collects
+    // the second factor and calls loginTwoFactor. Don't set a token yet.
+    if (data.twoFactorRequired) {
+      return { twoFactorRequired: true, challengeToken: data.challengeToken };
+    }
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
+  }, []);
+
+  const loginTwoFactor = useCallback(async (challengeToken, code) => {
+    const data = await authService.login2fa({ challengeToken, code });
     setToken(data.token);
     setUser(data.user);
     return data.user;
@@ -65,7 +77,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, setUser, loading, login, loginTwoFactor, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

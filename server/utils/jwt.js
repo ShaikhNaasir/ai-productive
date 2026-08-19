@@ -3,8 +3,8 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/env');
 
-function signToken(payload) {
-  return jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.expiresIn });
+function signToken(payload, options = {}) {
+  return jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.expiresIn, ...options });
 }
 
 function verifyToken(token) {

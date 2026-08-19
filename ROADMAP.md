@@ -208,6 +208,14 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   grandfathered verified on boot. Schema: `User.emailVerified`/`emailVerifyTokenHash`/
   `emailVerifyExpires`. Tests: server +9, client +5. Server Jest 231, client Vitest 53
   green; lint + build OK. **Owner:** set `RESEND_API_KEY` on Render to turn it on.
-- [ ] **E2 — Two-factor auth (TOTP).** Optional per-user 2FA: enroll (authenticator
-  QR/secret), verify-and-enable, a second-factor challenge at login, backup codes,
-  disable. TOTP via Node `crypto` (RFC 6238, no dep). Separate slice.
+- [x] **E2 — Two-factor auth (TOTP).** Optional per-user 2FA. `services/totp.js`
+  (RFC 6238 on Node `crypto`, no dep) + `services/twoFactor.js` (hashed single-use
+  backup codes). Two-step enroll: `POST /auth/2fa/setup` (pending secret + `qrcode`
+  data-URI + otpauth URI) → `POST /auth/2fa/enable` (confirm code → enable + 10 backup
+  codes shown once); `POST /auth/2fa/disable` (code required). Login is now two-step:
+  password → `{ twoFactorRequired, challengeToken }` (short-lived) → `POST /auth/2fa/login`
+  (TOTP or backup code) → session token. Client: Settings "Two-factor authentication"
+  card (QR enroll, backup codes) + a second-factor step on the login page. Schema:
+  `User.twoFactorEnabled`/`twoFactorSecret`/`twoFactorPendingSecret`/`twoFactorBackupCodes`.
+  New dep: `qrcode` (server, QR only). Tests: server +9, client +2. Server Jest 240,
+  client Vitest 55 green; lint + build OK.

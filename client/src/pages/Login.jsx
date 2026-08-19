@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginTwoFactor } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   // Only redirect to an internal absolute path — never an off-site URL (open-redirect guard).
@@ -21,20 +21,86 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  // Second-factor step: after a correct password, a 2FA-enabled account must enter a code.
+  const [challenge, setChallenge] = useState(null);
+  const [code, setCode] = useState('');
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await login(form);
-      navigate(from, { replace: true });
+      const res = await login(form);
+      if (res && res.twoFactorRequired) {
+        setChallenge(res.challengeToken);
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       setError(apiError(err, 'Login failed'));
     } finally {
       setLoading(false);
     }
   };
+
+  const submit2fa = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await loginTwoFactor(challenge, code.trim());
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(apiError(err, 'Verification failed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (challenge) {
+    return (
+      <AuthLayout>
+        <Card className="w-full border-0 shadow-lg sm:border">
+          <CardHeader>
+            <CardTitle className="text-2xl">Two-factor authentication</CardTitle>
+            <CardDescription>Enter the 6-digit code from your authenticator app (or a backup code).</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={submit2fa} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="code">Authentication code</Label>
+                <Input
+                  id="code"
+                  autoFocus
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Verifying…
+                  </>
+                ) : (
+                  'Verify'
+                )}
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setChallenge(null); setCode(''); setError(''); }}
+                className="w-full text-center text-sm text-muted-foreground hover:underline"
+              >
+                Back to sign in
+              </button>
+            </form>
+          </CardContent>
+        </Card>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout>

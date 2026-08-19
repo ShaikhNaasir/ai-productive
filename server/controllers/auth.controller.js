@@ -4,18 +4,24 @@ const bcrypt = require('bcryptjs');
 const prisma = require('../models/prisma');
 const config = require('../config/env');
 const { signToken, verifyToken } = require('../utils/jwt');
+const QRCode = require('qrcode');
 const { disconnectUser } = require('../realtime');
 const ApiError = require('../utils/ApiError');
 const emailVerification = require('../services/emailVerification');
+const totp = require('../services/totp');
+const twoFactor = require('../services/twoFactor');
 const {
   registerSchema,
   loginSchema,
   updateProfileSchema,
   changePasswordSchema,
   verifyEmailSchema,
+  twoFactorCodeSchema,
+  twoFactorLoginSchema,
 } = require('../validators/auth.schema');
 
 const SALT_ROUNDS = 10;
+const CHALLENGE_TTL = '5m'; // window to complete the 2FA step after password
 
 // A real hash to compare against when the email is unknown, so a miss costs the same
 // bcrypt work as a wrong password. Without it, response timing leaks which addresses
@@ -29,6 +35,7 @@ function serializeUser(user) {
     name: user.name,
     role: user.role,
     emailVerified: user.emailVerified,
+    twoFactorEnabled: user.twoFactorEnabled,
     createdAt: user.createdAt,
   };
 }
@@ -104,6 +111,13 @@ async function login(req, res) {
       where: { id: user.id },
       data: { role: 'ADMIN', emailVerified: true },
     });
+  }
+
+  // Second factor: password alone is not enough. Hand back a short-lived challenge
+  // token (not a session) that POST /auth/2fa/login exchanges for the real token.
+  if (account.twoFactorEnabled) {
+    const challengeToken = signToken({ sub: account.id, purpose: '2fa' }, { expiresIn: CHALLENGE_TTL });
+    return res.json({ twoFactorRequired: true, challengeToken });
   }
 
   res.json({ user: serializeUser(account), token: issueToken(account) });
@@ -211,6 +225,114 @@ async function resendVerification(req, res) {
   res.json({ success: true, verification });
 }
 
+// ---- Two-factor auth (Roadmap E2) ----
+
+// Step 1 of enrollment: generate a pending secret and return the otpauth URI + a
+// scannable QR data-URI. Not enabled until a code confirms it (step 2).
+async function setupTwoFactor(req, res) {
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (user.twoFactorEnabled) {
+    throw ApiError.badRequest('Two-factor auth is already enabled.');
+  }
+  const secret = totp.generateSecret();
+  await prisma.user.update({ where: { id: user.id }, data: { twoFactorPendingSecret: secret } });
+
+  const otpauthUrl = totp.otpauthURL(secret, user.email);
+  const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
+  res.json({ secret, otpauthUrl, qrDataUrl });
+}
+
+// Step 2: confirm a code against the pending secret, then enable 2FA and hand back
+// one-time backup codes (shown exactly once).
+async function enableTwoFactor(req, res) {
+  const { code } = twoFactorCodeSchema.parse(req.body);
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (user.twoFactorEnabled) {
+    throw ApiError.badRequest('Two-factor auth is already enabled.');
+  }
+  if (!user.twoFactorPendingSecret) {
+    throw ApiError.badRequest('Start setup first.');
+  }
+  if (!totp.verify(user.twoFactorPendingSecret, code)) {
+    throw ApiError.badRequest('That code is incorrect. Try again.');
+  }
+
+  const { plain, hashes } = twoFactor.generateBackupCodes();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      twoFactorEnabled: true,
+      twoFactorSecret: user.twoFactorPendingSecret,
+      twoFactorPendingSecret: null,
+      twoFactorBackupCodes: hashes,
+    },
+  });
+  res.json({ success: true, backupCodes: plain });
+}
+
+// Turn 2FA off. Requires a current code (or a backup code) so a hijacked session
+// can't silently strip the second factor.
+async function disableTwoFactor(req, res) {
+  const { code } = twoFactorCodeSchema.parse(req.body);
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user.twoFactorEnabled) {
+    throw ApiError.badRequest('Two-factor auth is not enabled.');
+  }
+  const ok =
+    totp.verify(user.twoFactorSecret, code) ||
+    twoFactor.consumeBackupCode(user.twoFactorBackupCodes, code) !== null;
+  if (!ok) {
+    throw ApiError.badRequest('That code is incorrect.');
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      twoFactorEnabled: false,
+      twoFactorSecret: null,
+      twoFactorPendingSecret: null,
+      twoFactorBackupCodes: [],
+    },
+  });
+  res.json({ success: true });
+}
+
+// Complete login: exchange the challenge token + a TOTP (or backup) code for a real
+// session token. A used backup code is consumed.
+async function loginTwoFactor(req, res) {
+  const { challengeToken, code } = twoFactorLoginSchema.parse(req.body);
+
+  let payload;
+  try {
+    payload = verifyToken(challengeToken);
+  } catch {
+    throw ApiError.unauthorized('Your login session expired. Please sign in again.');
+  }
+  if (payload.purpose !== '2fa') {
+    throw ApiError.unauthorized('Invalid login challenge.');
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+  if (!user || !user.twoFactorEnabled) {
+    throw ApiError.unauthorized('Invalid login challenge.');
+  }
+  if (user.status === 'DISABLED' || user.status === 'DELETED') {
+    throw ApiError.forbidden('This account is not active.');
+  }
+
+  if (totp.verify(user.twoFactorSecret, code)) {
+    return res.json({ user: serializeUser(user), token: issueToken(user) });
+  }
+  const remaining = twoFactor.consumeBackupCode(user.twoFactorBackupCodes, code);
+  if (remaining) {
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { twoFactorBackupCodes: remaining },
+    });
+    return res.json({ user: serializeUser(updated), token: issueToken(updated) });
+  }
+  throw ApiError.unauthorized('That code is incorrect.');
+}
+
 module.exports = {
   register,
   login,
@@ -220,4 +342,8 @@ module.exports = {
   changePassword,
   verifyEmail,
   resendVerification,
+  setupTwoFactor,
+  enableTwoFactor,
+  disableTwoFactor,
+  loginTwoFactor,
 };

@@ -31,10 +31,23 @@ const verifyEmailSchema = z.object({
   token: z.string().min(1),
 });
 
+// A TOTP (6 digits) or a backup code (e.g. "abcde-fghij"). Loose min length so both
+// forms pass; the controller decides which check to run.
+const twoFactorCodeSchema = z.object({
+  code: z.string().trim().min(6).max(20),
+});
+
+const twoFactorLoginSchema = z.object({
+  challengeToken: z.string().min(1),
+  code: z.string().trim().min(6).max(20),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
   updateProfileSchema,
   changePasswordSchema,
   verifyEmailSchema,
+  twoFactorCodeSchema,
+  twoFactorLoginSchema,
 };

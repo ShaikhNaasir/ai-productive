@@ -42,6 +42,7 @@ backlog.
 | Admin panel (D1–D4) | Role-gated `/admin`: system metrics, user list (metadata + aggregate counts only, never private content), per-user drill-down, moderation (disable/enable, force-logout, role, plan, soft/hard delete), append-only audit log. Admins bootstrapped from an `ADMIN_EMAILS` allowlist | `GET /api/admin/metrics`, `GET /api/admin/users`, `GET /api/admin/users/:id`, `POST /api/admin/users/:id/{disable,enable,force-logout,role,plan}`, `DELETE /api/admin/users/:id`, `GET /api/admin/audit` |
 | SaaS billing — Razorpay (D5) | Free/paid tiers with plan-gated limits (monthly AI spend, AI rate, task/note/doc caps → 402 with upgrade prompt); Razorpay subscription checkout + idempotent, signature-verified webhook; "Plan & billing" card in Settings. Off unless configured | `GET /api/billing/status`, `POST /api/billing/{checkout,verify,cancel}`, `POST /api/billing/webhook` |
 | Email verification (E1) | New accounts start unverified; a hashed, expiring token is emailed (Resend); key actions (AI, sharing, billing checkout, uploads, Google) hard-block with 403 until verified; persistent "Verify your account" banner. Block engages only when email is configured; admins exempt | `POST /api/auth/verify-email`, `POST /api/auth/resend-verification` |
+| Two-factor auth — TOTP (E2) | Optional per-user 2FA via any authenticator app (RFC 6238, no dep for the algorithm). QR enrollment + single-use backup codes; login becomes a password → code two-step. Manage from Settings | `POST /api/auth/2fa/{setup,enable,disable,login}` |
 
 ## 🛠 Technologies Used
 

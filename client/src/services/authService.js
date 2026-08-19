@@ -14,4 +14,8 @@ export const authService = {
     }),
   verifyEmail: (token) => api.post('/auth/verify-email', { token }).then((r) => r.data),
   resendVerification: () => api.post('/auth/resend-verification').then((r) => r.data),
+  setup2fa: () => api.post('/auth/2fa/setup').then((r) => r.data),
+  enable2fa: (code) => api.post('/auth/2fa/enable', { code }).then((r) => r.data),
+  disable2fa: (code) => api.post('/auth/2fa/disable', { code }).then((r) => r.data),
+  login2fa: (payload) => api.post('/auth/2fa/login', payload).then((r) => r.data),
 };

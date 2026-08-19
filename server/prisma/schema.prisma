@@ -66,6 +66,13 @@ model User {
   emailVerified       Boolean   @default(false)
   emailVerifyTokenHash String?
   emailVerifyExpires   DateTime?
+  // Two-factor auth (Roadmap E2, TOTP). `pending` holds the secret between setup and
+  // the confirming code; on enable it moves to `secret`. Backup codes are stored
+  // hashed and consumed single-use.
+  twoFactorEnabled        Boolean  @default(false)
+  twoFactorSecret         String?
+  twoFactorPendingSecret  String?
+  twoFactorBackupCodes    String[] @default([])
   // Admin panel (Roadmap D). role gates /api/admin/*; a DISABLED account is
   // rejected everywhere and cannot log in.
   role         Role       @default(USER)

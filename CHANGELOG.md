@@ -66,6 +66,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Two-factor authentication — TOTP (Roadmap E2).** Optional per-user 2FA with an
+  authenticator app. The TOTP algorithm (RFC 6238) is implemented on Node `crypto`
+  with no third-party dependency (`services/totp.js`); the only new package is
+  `qrcode`, used server-side to render the enrollment QR. Enrollment is two-step: a
+  `POST /api/auth/2fa/setup` issues a pending secret plus a scannable QR / otpauth URI,
+  and `POST /api/auth/2fa/enable` confirms a code, turns 2FA on, and returns ten
+  single-use backup codes (shown once, stored hashed). `POST /api/auth/2fa/disable`
+  requires a current code. Login becomes two-step: a correct password on a 2FA account
+  returns `{ twoFactorRequired, challengeToken }` (a short-lived challenge, not a
+  session) which `POST /api/auth/2fa/login` exchanges — using a TOTP or a backup code —
+  for the real token. The client adds a "Two-factor authentication" card in Settings
+  (QR enrollment, backup-code display) and a second-factor step on the login page.
+  Schema (via `prisma db push`): `User.twoFactorEnabled`, `twoFactorSecret`,
+  `twoFactorPendingSecret`, `twoFactorBackupCodes`. Tests: server Jest **240**, client
+  Vitest **55**; lint + build clean.
 - **Email verification (Roadmap E1).** New accounts start unverified and must confirm
   their email. A hashed, expiring token is emailed via Resend (`services/mailer.js`,
   REST over axios, no new dependency) and consumed by `POST /api/auth/verify-email`;

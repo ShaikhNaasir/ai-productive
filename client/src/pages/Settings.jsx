@@ -258,6 +258,149 @@ function BillingCard() {
   );
 }
 
+function TwoFactorCard() {
+  const { user, setUser } = useAuth();
+  const [mode, setMode] = useState('idle'); // idle | setup | backup
+  const [setup, setSetup] = useState(null); // { qrDataUrl, secret }
+  const [code, setCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState([]);
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const enabled = user?.twoFactorEnabled;
+
+  const startSetup = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      setSetup(await authService.setup2fa());
+      setMode('setup');
+    } catch (err) {
+      setMsg({ ok: false, text: apiError(err, 'Could not start setup') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmEnable = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await authService.enable2fa(code.trim());
+      setBackupCodes(res.backupCodes || []);
+      setMode('backup');
+      setCode('');
+      setUser({ ...user, twoFactorEnabled: true });
+    } catch (err) {
+      setMsg({ ok: false, text: apiError(err, 'Could not enable 2FA') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      await authService.disable2fa(code.trim());
+      setUser({ ...user, twoFactorEnabled: false });
+      setCode('');
+      setMsg({ ok: true, text: 'Two-factor authentication disabled.' });
+    } catch (err) {
+      setMsg({ ok: false, text: apiError(err, 'Could not disable 2FA') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          Two-factor authentication
+          <Badge variant={enabled ? 'default' : 'secondary'}>{enabled ? 'On' : 'Off'}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Enabled: offer disable (requires a current code). */}
+        {enabled && mode !== 'backup' && (
+          <form onSubmit={disable} className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Your account is protected with an authenticator app. Enter a code to turn it off.
+            </p>
+            <Input
+              placeholder="6-digit or backup code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="max-w-xs"
+            />
+            <Button type="submit" variant="destructive" disabled={busy || !code}>
+              Disable 2FA
+            </Button>
+          </form>
+        )}
+
+        {/* Disabled + idle: offer to start setup. */}
+        {!enabled && mode === 'idle' && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Add a second step at login with an authenticator app (Google Authenticator, Authy…).
+            </p>
+            <Button type="button" onClick={startSetup} disabled={busy}>
+              Enable 2FA
+            </Button>
+          </>
+        )}
+
+        {/* Setup: scan the QR (or enter the secret), then confirm a code. */}
+        {mode === 'setup' && setup && (
+          <form onSubmit={confirmEnable} className="space-y-3">
+            <p className="text-sm text-muted-foreground">Scan this with your authenticator app:</p>
+            <img src={setup.qrDataUrl} alt="2FA QR code" className="h-40 w-40 rounded border bg-white p-1" />
+            <p className="text-xs text-muted-foreground">
+              Or enter this key manually: <span className="font-mono">{setup.secret}</span>
+            </p>
+            <Input
+              placeholder="Enter the 6-digit code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="max-w-xs"
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={busy || !code}>Confirm</Button>
+              <Button type="button" variant="ghost" onClick={() => { setMode('idle'); setCode(''); }}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Backup codes: shown exactly once after enabling. */}
+        {mode === 'backup' && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-foreground">Save your backup codes</p>
+            <p className="text-sm text-muted-foreground">
+              Each works once if you lose your device. They won&apos;t be shown again.
+            </p>
+            <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted/40 p-3 font-mono text-sm">
+              {backupCodes.map((c) => (
+                <span key={c}>{c}</span>
+              ))}
+            </div>
+            <Button type="button" onClick={() => setMode('idle')}>
+              I&apos;ve saved them
+            </Button>
+          </div>
+        )}
+
+        <Status msg={msg} />
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Settings() {
   const { user, setUser } = useAuth();
   const [profile, setProfile] = useState({ name: user?.name || '', email: user?.email || '' });
@@ -334,6 +477,8 @@ export default function Settings() {
       </Card>
 
       <BillingCard />
+
+      <TwoFactorCard />
 
       <GoogleCalendarCard />
     </div>
