@@ -23,6 +23,8 @@ schedules, reminders, daily priorities, and AI assistance.
 - AI output is schema-validated before any DB write.
 - The app degrades gracefully if `ai-service` is unreachable — core CRUD keeps working; search falls back to keyword.
 - Reminders fire via the persistent DB-backed scheduler, not in-memory only.
+- Admin endpoints (`/api/admin/*`, gated by `requireAdmin`) return metadata and aggregate counts only — never another user's private content (task titles, note bodies, etc.). This is the one sanctioned exception to per-user scoping.
+- Third-party integrations are off-unless-configured: absent keys (`GOOGLE_*`, `RAZORPAY_*`, `RESEND_API_KEY`, provider LLM keys) leave that feature disabled/degraded, never crashing core CRUD. Real secrets live only in the host env — never in tracked source (the repo is public).
 
 ## Commands
 
