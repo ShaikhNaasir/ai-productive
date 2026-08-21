@@ -24,5 +24,6 @@ router.use('/habits', require('./habit.routes'));
 router.use('/search', require('./search.routes'));
 router.use('/admin', require('./admin.routes'));
 router.use('/billing', require('./billing.routes'));
+router.use('/notifications', require('./notification.routes'));
 
 module.exports = router;

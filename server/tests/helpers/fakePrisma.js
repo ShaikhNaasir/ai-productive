@@ -41,6 +41,7 @@ const modelDefaults = {
   adminAuditLogs: { targetUserId: null, meta: null },
   billingEvents: { userId: null, payload: null },
   appSettings: {},
+  notifications: { type: 'reminder', refId: null, readAt: null },
 };
 
 function matchCondition(value, cond) {
@@ -266,6 +267,7 @@ function createFakePrisma() {
     adminAuditLog: makeModel('adminAuditLogs'),
     billingEvent: makeModel('billingEvents'),
     appSetting: makeModel('appSettings'),
+    notification: makeModel('notifications'),
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     $disconnect: async () => {},

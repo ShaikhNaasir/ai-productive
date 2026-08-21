@@ -50,8 +50,21 @@ async function tick() {
       continue;
     }
 
+    // Persist a notification so an offline user still sees this on their next visit
+    // (the socket emit below only reaches a connected client). Best-effort.
+    let notificationId = reminder.id;
+    try {
+      const n = await prisma.notification.create({
+        data: { userId: reminder.userId, type: 'reminder', message: reminder.message, refId: reminder.id },
+      });
+      notificationId = n.id;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[scheduler] notification persist failed for ${reminder.id}: ${err.message}`);
+    }
+
     emitToUser(reminder.userId, 'reminder', {
-      id: reminder.id,
+      id: notificationId,
       message: reminder.message,
       remindAt: reminder.remindAt,
       taskId: reminder.taskId,

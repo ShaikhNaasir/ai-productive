@@ -10,6 +10,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Reminders are no longer lost when you're offline (G1).** Previously a reminder
+  fired only as a live Socket.IO emit — if no browser tab was connected at that
+  moment it vanished, and nothing resurfaced it afterward. The scheduler now also
+  persists a `Notification` row when it fires, and the client fetches recent
+  notifications on load, so a reminder that fired while you were away appears in the
+  bell on your next visit. Read/unread state is tracked server-side.
+  (`GET /api/notifications`, `POST /api/notifications/read`, `PATCH /:id/read`.)
 - **Registration now confirms "check your email"** when a verification email was
   actually sent (skipped for admins and when email delivery isn't configured), instead
   of dropping straight to the dashboard.

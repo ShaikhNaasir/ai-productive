@@ -101,6 +101,7 @@ model User {
   taskShares    TaskShare[]
   aiUsage       AiUsage[]
   googleAccount GoogleAccount?
+  notifications Notification[]
 
   @@map("users")
 }
@@ -313,6 +314,24 @@ model Reminder {
   // is near-useless since the column is overwhelmingly true once reminders age out.
   @@index([sent, remindAt])
   @@map("reminders")
+}
+
+// Persisted notification (Roadmap G1). Written when the reminder scheduler fires so
+// a user who was offline still sees it on their next visit (the live Socket.IO emit
+// only reaches a connected client). `readAt` tracks the unread badge.
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String    @default("reminder")
+  message   String
+  refId     String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
 
 // Small key/value store for one-off app state (Roadmap F3) — e.g. the flag marking

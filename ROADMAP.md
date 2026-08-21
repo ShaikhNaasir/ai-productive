@@ -244,3 +244,19 @@ free/paid SaaS tier (`User.plan` scaffold; billing is a separate later epic).
   verify-expired token, grandfather run-once, billing webhook downgrade, 2FA disable
   via backup code, and 2FA challenge-purpose rejection. Tests: server +5, client +1.
   Server Jest 249, client Vitest 58 green; lint + build OK. Schema: `app_settings`.
+
+## Tier G — Reliable reminders
+
+- [x] **G1 — Persistent notifications + catch-up.** Reminders used to fire only over
+  a live Socket.IO emit — lost if no browser tab was connected at that moment, and
+  never resurfaced. Now the scheduler also writes a persisted `Notification` row when
+  it fires, and the client fetches recent notifications on load, so reminders that
+  fired while the user was offline show up in the bell on their next visit. Read state
+  is tracked server-side. New: `Notification` model (`notifications` table),
+  `GET /api/notifications` + `POST /api/notifications/read` + `PATCH /:id/read`,
+  `notificationService`, `NotificationContext` fetch-on-mount. Tests: server +2,
+  client +2. Server Jest 251, client Vitest 60 green; lint + build OK.
+- [ ] **G2 — Browser notifications + event reminders.** Web Notifications API
+  (permission + OS toast when a reminder fires) and a "Remind me" toggle on the
+  Calendar "Add event" form (creates a reminder alongside the schedule, which is
+  otherwise silent).
