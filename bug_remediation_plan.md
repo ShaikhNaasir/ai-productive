@@ -1,1288 +1,1120 @@
 # Bug Remediation Plan
 
-**Generated:** 2026-08-17 · **Branch:** `claude/beautiful-einstein-r9hm2f` · **Base commit:** `fe64219`
+**Generated:** 2026-08-31 · **Branch:** `claude/beautiful-einstein-g2t30k` · **Base commit:** `7c1528b`
 
 Automated audit of the AI-Powered Personal Productivity Assistant repository.
 
-> ## ✅ ALL 24 ITEMS IMPLEMENTED — 2026-08-18
+> ### ⏸ Awaiting approval — no code has been changed
 >
-> Every bug below has been fixed, tested, and committed across seven slices
-> (`173f14f`, `3cc83ac`, `07971fe`, `c867fa8`, `ec7ca68`, `6e67cca`, `4a28cbd`).
-> The remediation text in each section is preserved as written; where the delivered
-> fix went beyond or differed from the plan, a **Delivered** note records it.
+> This is an audit only. Nothing in this plan has been implemented. The one file
+> written by this run is this document. Approve the items you want and they can be
+> implemented in the slices proposed at the end.
+
+> ### Note on the previous audit
 >
-> | Check | Before | After |
-> | --- | --- | --- |
-> | server Jest | 148 passing | **187 passing** (23 suites) |
-> | client Vitest | 34 passing | **40 passing** (17 files) |
-> | ai-service pytest | not runnable (no venv) | **35 passing** |
-> | server / client lint | clean | clean |
-> | server `npm audit --omit=dev` | 0 vulns | 0 vulns |
-> | client `npm audit` | 1 critical, 1 high, 3 moderate | **0 vulnerabilities** |
-> | client production build | OK | OK (Vite 8, chunking intact) |
-> | Prisma schema | valid | valid (3 new indexes, `Schedule.allDay`) |
->
-> **Deploy note:** the schema gained `Schedule.allDay` and three composite indexes.
-> Render applies these via `prisma db push`, per the existing convention in
-> `ROADMAP.md` — no migration files were added.
+> The earlier 24-item audit (2026-08-17, base `fe64219`) is **complete** — all items
+> shipped via PR #1 and are recorded in `CHANGELOG.md` and `ROADMAP.md`. This file
+> has been replaced with the current audit rather than appended to. None of the
+> issues below is a regression of a previously fixed item; they are new findings in
+> code that landed after that audit (`E1`, `E2`, `D1`–`D5`, `F1`–`F3`, `G1`).
 
 ## Baseline health (at audit time)
 
-Everything in the repo was green when the audit ran. **None of the issues below was a
-test failure** — they were latent defects the existing suites did not cover.
-
 | Check | Result |
 | --- | --- |
-| `server && npm test` (Jest) | ✅ 21 suites, 148 tests passing |
-| `client && npm test` (Vitest) | ✅ 16 files, 34 tests passing |
+| `server && npm test` (Jest) | ✅ 32 suites, 251 tests passing |
+| `client && npm test` (Vitest) | ❌ **1 failed**, 59 passed (24 files) — see [BUG-03](#bug-03) |
+| `ai-service && pytest` | ✅ 38 passed |
 | `server && npm run lint` | ✅ clean |
 | `client && npm run lint` | ✅ clean |
-| `server && npm audit --omit=dev` | ✅ 0 vulnerabilities |
-| `client && npm audit` | ⚠️ 5 (1 critical, 1 high, 3 moderate) — all dev-only, see BUG-12 |
+| `server && npm ci` audit | ✅ 0 vulnerabilities |
+| `client && npm ci` audit | ✅ 0 vulnerabilities |
 
-`ai-service` was not executed at audit time: no `.venv` existed in the container and
-`requirements.txt` was not installed, so its findings were from code reading only.
-**The environment has since been created and its suite runs: 35 tests passing**,
-including two new cases covering BUG-22.
+Note: the server suite passes but prints a `ValidationError` from `express-rate-limit`
+on every boot — that is [BUG-04](#bug-04), not test noise.
+
+Unlike the previous audit, this run found **one genuinely failing test** and **one
+confirmed, exploitable authentication bypass** (reproduced end-to-end, see BUG-01).
 
 ## Summary
 
-All items are ✅ **Fixed**. "Commit" is the slice each landed in.
-
-| ID | Severity | Area | Issue | Status | Commit |
-| --- | --- | --- | --- | --- | --- |
-| [BUG-01](#bug-01) | 🔴 High | server/tasks | `parentId` accepted on update with no ownership check → cross-user cascade delete | ✅ | `173f14f` |
-| [BUG-02](#bug-02) | 🔴 High | server/realtime | Socket.IO ignores `tokenVersion`; revoked JWTs keep streaming | ✅ | `173f14f` |
-| [BUG-03](#bug-03) | 🔴 High | server/google | Calendar sync silently drops everything past the first 250 events | ✅ | `3cc83ac` |
-| [BUG-04](#bug-04) | 🟠 Medium | server/google | All-day Google events rewritten as midnight-UTC timed events | ✅ | `3cc83ac` |
-| [BUG-05](#bug-05) | 🟠 Medium | server/google | Every pulled event is echoed back to Google on the next sync | ✅ | `3cc83ac` |
-| [BUG-06](#bug-06) | 🟠 Medium | server/scheduler | Overdue recurring reminder fires a burst of duplicates | ✅ | `07971fe` |
-| [BUG-07](#bug-07) | 🟠 Medium | server/scheduler | `setInterval` over async work → overlapping ticks | ✅ | `07971fe` |
-| [BUG-08](#bug-08) | 🟠 Medium | server/documents | Untruncated document text sent to the LLM | ✅ | `c867fa8` |
-| [BUG-09](#bug-09) | 🟠 Medium | client/focus | Pomodoro counts interval ticks, not wall clock | ✅ | `ec7ca68` |
-| [BUG-10](#bug-10) | 🟠 Medium | client/auth | 401 clears the token but not the auth state | ✅ | `ec7ca68` |
-| [BUG-11](#bug-11) | 🟠 Medium | server/perf | Unbounded full-table reads in analytics / usage / focus stats | ✅ | `c867fa8` |
-| [BUG-12](#bug-12) | 🟠 Medium | client/deps | `vitest`/`vite` advisories (dev-only) | ✅ | `4a28cbd` |
-| [BUG-13](#bug-13) | 🟡 Low | server/search | Keyword search starves tasks | ✅ | `6e67cca` |
-| [BUG-14](#bug-14) | 🟡 Low | server/search | Semantic relevance score can go negative | ✅ | `6e67cca` |
-| [BUG-15](#bug-15) | 🟡 Low | server/habits | Check-in race returns 500 instead of being idempotent | ✅ | `6e67cca` |
-| [BUG-16](#bug-16) | 🟡 Low | server/reminders | `taskId` never ownership-checked | ✅ | `173f14f` |
-| [BUG-17](#bug-17) | 🟡 Low | server/auth | Login timing side channel enables user enumeration | ✅ | `173f14f` |
-| [BUG-18](#bug-18) | 🟡 Low | server/focus | Concurrent open sessions accumulate as orphans | ✅ | `07971fe` |
-| [BUG-19](#bug-19) | 🟡 Low | client/pwa | Static SW cache name never evicts old assets | ✅ | `ec7ca68` |
-| [BUG-20](#bug-20) | 🟡 Low | server/ops | No graceful shutdown on SIGTERM | ✅ | `07971fe` |
-| [BUG-21](#bug-21) | 🟡 Low | server/db | Missing composite indexes for the hot scheduler/usage queries | ✅ | `c867fa8` |
-| [BUG-22](#bug-22) | 🟡 Low | ai-service | Non-ASCII internal key header raises 500 instead of 401 | ✅ | `6e67cca` |
-| [BUG-23](#bug-23) | 🟡 Low | client/tests | `act()` warnings from `PomodoroTimer` | ✅ | `ec7ca68` |
-| [BUG-24](#bug-24) | 🟡 Low | server/ai | Worst-case 121.5 s AI request with no response deadline | ✅ | `ec7ca68`¹ |
-
-¹ BUG-24 landed in `c867fa8` alongside the other cost/performance work.
-
-### Where the delivered fix differed from the plan
-
-Five items needed more than the plan specified. Each is detailed in its section:
-
-- **BUG-01** — the plan's guard covered re-parenting *under* a bad parent. It missed
-  the mirror case: re-parenting a task that already *has* subtasks, which also
-  produces two-level nesting. Added a child-count check.
-- **BUG-05** — the plan put the watermark immediately after the pull. That still
-  leaves step 2's `googleEventId` writes past the watermark, so freshly-pushed events
-  were re-pushed once. Moved it after the last local write of the run instead.
-- **BUG-11** — narrowing the reads changes `total` / `totalCostUsd` from all-time to
-  windowed. Rather than leave that ambiguous, the endpoints now report `windowDays`
-  and the Analytics card labels the window in the UI.
-- **BUG-12** — Vite 8 bundles with rolldown, which rejects the object form of
-  `manualChunks`, and its native config loader drops the CJS globals. Both needed
-  migrating beyond the dependency bump.
-- **BUG-22** — the plan's test sent a non-ASCII header as a `str`; httpx refuses to
-  encode that client-side. The test sends raw bytes, matching how Starlette actually
-  receives and latin-1 decodes a real request.
-
-### Test-helper work this required
-
-`server/tests/helpers/fakePrisma.js` was missing query surface the fixes depend on.
-Added, so the new behaviour is genuinely exercised rather than silently ignored:
-
-- **UUID-shaped ids** (was a bare counter) — the `.uuid()` body validators now behave
-  in tests as they do against Prisma's real `@default(uuid())`.
-- **`select`** — column projections are verified; a controller reading an unselected
-  field now fails in tests the way it would in production.
-- **`take`**, **`upsert`** (with compound-unique `where`), **`updateMany`**.
+| ID | Severity | Area | Issue |
+| --- | --- | --- | --- |
+| [BUG-01](#bug-01) | 🔴 **Critical** | server/auth | 2FA challenge token is accepted as a full session token — complete 2FA bypass |
+| [BUG-02](#bug-02) | 🔴 High | server/billing | `POST /billing/verify` never binds the subscription to the caller — one payment upgrades unlimited accounts |
+| [BUG-03](#bug-03) | 🟠 Medium | client/tests | `billing.test.jsx` fails: Vitest 4 rejects an arrow-function mock used with `new` |
+| [BUG-04](#bug-04) | 🟠 Medium | server/ratelimit | Custom `keyGenerator` uses `req.ip` raw → IPv6 clients bypass the global API limit |
+| [BUG-05](#bug-05) | 🟠 Medium | server/ratelimit | `apiLimiter` is mounted before `requireAuth`, so its per-user keying branch is dead |
+| [BUG-06](#bug-06) | 🟠 Medium | server/auth | TOTP codes are replayable for their whole ±1 validity window |
+| [BUG-07](#bug-07) | 🟠 Medium | server/auth | Backup-code consumption is a read-modify-write race |
+| [BUG-08](#bug-08) | 🟡 Low | server/auth | `secretCrypto.decrypt` throws on a rotated key → 500 instead of a clean auth error |
+| [BUG-09](#bug-09) | 🟡 Low | server/scheduler | Reminder mark-sent is not atomic → duplicate sends on a multi-instance deploy |
+| [BUG-10](#bug-10) | 🟡 Low | server/auth | Backup codes stored as unsalted SHA-256 of a 40-bit secret |
+| [BUG-11](#bug-11) | 🟡 Low | server/db | `emailVerifyTokenHash` is unindexed → full table scan per verification |
+| [BUG-12](#bug-12) | 🟡 Low | server/db | `notifications` grows unbounded — no retention policy |
+| [BUG-13](#bug-13) | 🟡 Low | server/quota | `assertWithinQuota` count-then-create race lets a plan cap be exceeded |
+| [BUG-14](#bug-14) | 🟡 Low | client/realtime | Socket reconnect does not re-run the notification catch-up fetch |
+| [BUG-15](#bug-15) | ⚪ Trivial | client | `clear()` and the `PATCH /notifications/:id/read` endpoint are unused dead code |
 
 ---
 
-## 🔴 High
+<a id="bug-01"></a>
+## BUG-01 — 🔴 Critical — 2FA challenge token works as a session token
 
-### BUG-01
+**Files:** `server/middleware/auth.js:27` · `server/controllers/auth.controller.js:81,151`
 
-#### `parentId` is accepted on task update with no ownership or depth check
+### Root cause
 
-**Files:** `server/controllers/task.controller.js:98-118` · `server/validators/task.schema.js:19-25` · `server/prisma/schema.prisma:84`
-
-**Root cause.** `updateTaskSchema` is `createTaskSchema.partial()`, so it inherits
-`parentId`. `create()` guards it via `assertValidParent()`; `update()` does not — it
-passes the parsed body straight to Prisma:
+When a user has 2FA enabled, `login` deliberately withholds a session token and
+returns a short-lived *challenge* instead (`auth.controller.js:151`):
 
 ```js
-// task.controller.js:98-118  (update)
-const data = updateTaskSchema.parse(req.body);          // data may contain parentId
-const prior = await getAccessibleTask(req.user.id, req.params.id, { edit: true });
-...
-const task = await prisma.task.update({ where: { id: req.params.id }, data });
+const challengeToken = signToken({ sub: account.id, purpose: '2fa' }, { expiresIn: CHALLENGE_TTL });
+return res.json({ twoFactorRequired: true, challengeToken });
 ```
 
-Meanwhile the self-relation cascades on delete:
+That challenge is signed with the **same key and the same `signToken` helper** as a
+real session token. It differs only in carrying `purpose: '2fa'` and omitting the
+`ver` claim.
 
-```prisma
-// schema.prisma:84
-parent Task? @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
-```
-
-**Impact.**
-
-1. **Privilege escalation → cross-user deletion.** Deleting a task is owner-only by
-   design (`remove()` calls `getOwnedTask`). But a user holding only an **EDIT share**
-   on someone else's task `T` can `PATCH /api/tasks/T { "parentId": "<their own task X>" }`,
-   then delete `X`. The DB cascade destroys `T` — a task they were never authorized to
-   delete. This defeats the owner-only delete rule in `CLAUDE.md`'s invariants.
-2. **Unbounded nesting.** `assertValidParent` and `breakdownTask` both assume subtasks
-   are one level deep; update can build arbitrary depth, or point a task at itself.
-3. **Silent disappearance.** `list()` filters `parentId: null`, so re-parenting a task
-   under any arbitrary UUID removes it from the owner's own list with no error.
-
-**Remediation.** Reuse the existing guard, and restrict re-parenting to the task owner
-(an EDIT sharee has no business restructuring someone else's tree).
+`requireAuth` never looks at `purpose`, and its only other gate is the token-version
+check (`middleware/auth.js:27`):
 
 ```js
-// server/controllers/task.controller.js — in update(), after parsing
-async function update(req, res) {
-  const data = updateTaskSchema.parse(req.body);
-  const prior = await getAccessibleTask(req.user.id, req.params.id, { edit: true });
+if (!user || (payload.ver ?? 0) !== (user.tokenVersion ?? 0)) { ... }
+```
 
-  // Re-parenting is owner-only and must stay one level deep within the same user.
-  if ('parentId' in data) {
-    if (prior.userId !== req.user.id) {
-      throw ApiError.forbidden('Only the owner can move this task');
-    }
-    if (data.parentId === prior.id) {
-      throw ApiError.badRequest('A task cannot be its own parent');
-    }
-    await assertValidParent(req.user.id, data.parentId);  // already defined at :45
-  }
-  ...
+The challenge has no `ver`, so `payload.ver ?? 0` evaluates to `0`. `User.tokenVersion`
+is `@default(0)` and is only ever bumped by logout or a password change. **For any
+account that has never logged out or changed its password, `0 !== 0` is false and the
+challenge token authenticates as a full session.**
+
+An attacker who knows only the password gets the challenge from `POST /api/auth/login`
+and uses it directly as `Authorization: Bearer <challengeToken>`. The second factor is
+never presented. The window is the 5-minute `CHALLENGE_TTL` — ample to read or exfiltrate
+everything, and renewable by simply logging in again with the password.
+
+### Verified
+
+Reproduced end-to-end against the real app (registered a user, enabled TOTP, logged in
+with password only, then used the returned `challengeToken` as a Bearer token):
+
+```
+GET /api/auth/me  -> 200 {"user":{"id":"...","email":"poc@b.com", ...
+GET /api/tasks    -> 200
+```
+
+Both should have been `401`.
+
+### Remediation
+
+Make the token's purpose explicit and enforce it. Two small edits:
+
+**1. `server/controllers/auth.controller.js:81` — stamp session tokens.**
+
+```js
+function issueToken(user) {
+  return signToken({ sub: user.id, email: user.email, ver: user.tokenVersion ?? 0, purpose: 'session' });
 }
 ```
 
-`assertValidParent` already calls `getOwnedTask` (404s on another user's task) and
-rejects a parent that is itself a subtask, so this one guard closes all three holes.
-
-> **Delivered** (`173f14f`). Implemented as written, plus one case the plan missed:
-> the guard above rejects nesting *under* a subtask, but not nesting a task that
-> already *has* subtasks — equally a route to two-level depth. Added:
->
-> ```js
-> if (data.parentId) {
->   const childCount = await prisma.task.count({ where: { parentId: prior.id } });
->   if (childCount > 0) {
->     throw ApiError.badRequest('Cannot nest a task that has subtasks of its own');
->   }
-> }
-> ```
->
-> Six tests added across `task.test.js` and `share.test.js`, including the full
-> escalation path: an EDIT sharee attempting the re-parent gets 403 and the owner's
-> task is verified still top-level.
-
-**Tests to add** (`server/tests/task.test.js`):
-- update with a `parentId` owned by another user → 404
-- EDIT sharee sending `parentId` → 403
-- `parentId` equal to the task's own id → 400
-- `parentId` pointing at an existing subtask → 400 (`Cannot nest a subtask under a subtask`)
-
-**Difficulty:** Easy (~30 min incl. tests)
-
----
-
-### BUG-02
-
-#### Socket.IO handshake never checks `tokenVersion` — revoked JWTs keep streaming
-
-**File:** `server/realtime.js:17-27`
-
-**Root cause.** Commit `fe64219` added JWT revocation: `requireAuth` compares the
-token's `ver` claim against `user.tokenVersion` on every HTTP request. The realtime
-handshake was never updated and only verifies the signature:
+**2. `server/middleware/auth.js` — reject anything that is not a session token.**
+Add immediately after the `verifyToken` try/catch (around line 24):
 
 ```js
-// realtime.js:17-27
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (!token) return next(new Error('Authentication required'));
-  try {
-    const payload = verifyToken(token);
-    socket.userId = payload.sub;      // no tokenVersion check
-    next();
-  } catch {
-    next(new Error('Invalid token'));
+  // A token minted for another purpose (e.g. the 2FA login challenge) is not a
+  // session. Tokens issued before `purpose` was stamped have no claim and are
+  // still honoured, so existing sessions survive the deploy.
+  if (payload.purpose && payload.purpose !== 'session') {
+    return next(ApiError.unauthorized('Invalid or expired token'));
   }
-});
 ```
 
-**Impact.** After logout or a password change, a stolen token can still open a
-websocket and receive that user's reminder payloads (message text, `remindAt`,
-`taskId`) for the full 7-day JWT lifetime. Already-open sockets are never
-disconnected either, so revocation has no effect on the realtime channel at all.
+Treating a *missing* `purpose` as valid keeps already-issued session tokens working
+across the deploy. The challenge token carries `purpose: '2fa'` explicitly, so it is
+rejected from day one — the bypass closes immediately without logging everyone out.
 
-**Remediation.** Mirror `requireAuth`, and disconnect live sockets on revocation.
+**Defence in depth (recommended, same slice):** give the challenge a claim that cannot
+collide with a session at all, and check it in `loginTwoFactor`:
 
 ```js
-// server/realtime.js
-const prisma = require('./models/prisma');
-
-io.use(async (socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (!token) return next(new Error('Authentication required'));
-  let payload;
-  try {
-    payload = verifyToken(token);
-  } catch {
-    return next(new Error('Invalid token'));
-  }
-  try {
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user || (payload.ver ?? 0) !== (user.tokenVersion ?? 0)) {
-      return next(new Error('Session expired'));
-    }
-    socket.userId = user.id;
-    return next();
-  } catch (err) {
-    return next(err);
-  }
-});
-
-// Export so auth.controller can evict live sockets when tokenVersion is bumped.
-function disconnectUser(userId) {
-  if (io) io.in(userId).disconnectSockets(true);
-}
-```
-
-Then call `disconnectUser(user.id)` from `logout()` and `changePassword()` in
-`server/controllers/auth.controller.js` (best-effort, wrapped in try/catch).
-
-**Tests to add** (`server/tests/auth.test.js` or a new `realtime.test.js`): handshake
-middleware rejects a token whose `ver` no longer matches.
-
-**Difficulty:** Easy (~45 min)
-
----
-
-### BUG-03
-
-#### Google Calendar sync silently drops every event past the first page
-
-**Files:** `server/services/googleCalendar.js:71-90` · `server/services/googleSync.js:110-113`
-
-**Root cause.** `listEvents` requests one page and ignores `nextPageToken`:
-
-```js
-// googleCalendar.js:71-90
-const params = { calendarId: account.calendarId, singleEvents: true, maxResults: 250 };
-if (account.syncToken) params.syncToken = account.syncToken;
-else params.timeMin = new Date().toISOString();
-const res = await calendar.events.list(params);
-return { events: res.data.items || [], nextSyncToken: res.data.nextSyncToken || null };
-```
-
-The Google Calendar API returns `nextSyncToken` **only on the final page** of a
-result set. When results are paginated it returns `nextPageToken` and omits
-`nextSyncToken`. The caller then falls back to the old token:
-
-```js
-// googleSync.js:110-113
-data: { syncToken: nextSyncToken || account.syncToken, lastSyncedAt: syncStart },
-```
-
-**Impact.** For any account with more than 250 events in the window:
-
-- **Initial sync never completes.** `account.syncToken` starts `null`, so
-  `nextSyncToken` is `null`, so it stays `null` — forever. Every 5-minute tick redoes
-  the same full forward listing of the first 250 upcoming events. Events 251+ are
-  **never** synced into the app.
-- **Incremental sync stalls the same way** whenever a delta exceeds one page: the
-  stale token is retained and the same page is replayed indefinitely.
-
-This is silent — no error, no log, no failing test. The user just sees a partial calendar.
-
-**Remediation.** Page through until Google hands back a sync token.
-
-```js
-// server/services/googleCalendar.js
-async function listEvents(account) {
-  const calendar = getCalendarClient(account);
-  const base = { calendarId: account.calendarId, singleEvents: true, maxResults: 250 };
-  if (account.syncToken) base.syncToken = account.syncToken;
-  else base.timeMin = new Date().toISOString();
-
-  const events = [];
-  let pageToken;
-  let nextSyncToken = null;
-  // Bounded so a pathological calendar can't spin forever in one tick.
-  for (let page = 0; page < 20; page += 1) {
-    let res;
-    try {
-      res = await calendar.events.list({ ...base, ...(pageToken ? { pageToken } : {}) });
-    } catch (err) {
-      const status = err.code || err.response?.status;
-      if (status === 410) {
-        const gone = new Error('Sync token expired');
-        gone.code = 410;
-        throw gone;
-      }
-      throw err;
-    }
-    events.push(...(res.data.items || []));
-    nextSyncToken = res.data.nextSyncToken || null;
-    pageToken = res.data.nextPageToken || null;
-    if (!pageToken) break;
-  }
-  return { events, nextSyncToken };
-}
-```
-
-> Note: `pageToken` and `syncToken` are mutually exclusive per-request in the Google
-> API only in the sense that the page token already encodes the sync context — passing
-> both as above is the documented pagination pattern and is what `googleapis` expects.
-
-**Tests to add** (`server/tests/googleSync.test.js`): mock `events.list` to return a
-`nextPageToken` on call 1 and a `nextSyncToken` on call 2; assert both pages' events
-are processed and the new sync token is persisted.
-
-**Difficulty:** Medium (~1.5 h incl. tests)
-
----
-
-## 🟠 Medium
-
-### BUG-04
-
-#### All-day Google events are rewritten as midnight-UTC timed events
-
-**Files:** `server/services/googleCalendar.js:55-65` · `server/services/googleSync.js:8-18, 99-107`
-
-**Root cause.** The pull direction handles all-day events (`start.date`), but the push
-direction has no matching branch — it always emits `dateTime`:
-
-```js
-// googleSync.js:9  (pull — handles both shapes)
-const start = ev.start && (ev.start.dateTime || ev.start.date);
-
-// googleCalendar.js:55-65  (push — always timed)
-return {
-  summary: schedule.title,
-  start: { dateTime: new Date(schedule.startTime).toISOString() },
-  end:   { dateTime: new Date(schedule.endTime || schedule.startTime).toISOString() },
-};
-```
-
-**Impact.** A pulled all-day event becomes `2026-08-17T00:00:00Z` locally. When it is
-pushed back (which BUG-05 makes routine), the user's real Google Calendar entry is
-converted from an all-day event into a zero-length midnight event — visible corruption
-of data the app doesn't own. Worse for users east of UTC, where midnight UTC lands on
-the previous day.
-
-**Remediation.** Persist all-day-ness and round-trip it. Add a boolean to the model:
-
-```prisma
-// server/prisma/schema.prisma — model Schedule
-allDay Boolean @default(false)
-```
-
-```js
-// server/services/googleSync.js — fromGoogleEvent
-const allDay = Boolean(ev.start && !ev.start.dateTime && ev.start.date);
-return { title: ..., allDay, startTime: ..., endTime: ... };
-```
-
-```js
-// server/services/googleCalendar.js — toGoogleEvent
-function toGoogleEvent(schedule) {
-  const startDate = new Date(schedule.startTime);
-  const endDate = new Date(schedule.endTime || schedule.startTime);
-  const body = { summary: schedule.title, description: ..., location: ... };
-  if (schedule.allDay) {
-    const day = (d) => d.toISOString().slice(0, 10);
-    body.start = { date: day(startDate) };
-    body.end = { date: day(endDate) };   // Google treats `end.date` as exclusive
-  } else {
-    body.start = { dateTime: startDate.toISOString() };
-    body.end = { dateTime: endDate.toISOString() };
-  }
-  return body;
-}
-```
-
-Fixing BUG-05 first sharply reduces the blast radius of this one.
-
-**Tests to add:** `toGoogleEvent` emits `date` for `allDay: true` and `dateTime`
-otherwise; `fromGoogleEvent` sets `allDay` from a `start.date` payload.
-
-**Difficulty:** Medium (~1 h; touches the Prisma schema, applied via `db push`)
-
----
-
-### BUG-05
-
-#### Every pulled event is echoed straight back to Google on the next sync
-
-**File:** `server/services/googleSync.js:71-113`
-
-**Root cause.** `syncStart` is captured **before** the pull, but the pull's own writes
-bump each row's `@updatedAt` to a later instant:
-
-```js
-// googleSync.js:71
-const syncStart = new Date();          // T0
-...
-await pull(account);                   // prisma.schedule.update(...) → updatedAt = T1 > T0
-...
-data: { syncToken: ..., lastSyncedAt: syncStart },   // stores T0
-```
-
-On the next run, the "locally changed" query (`updatedAt > lastSyncedAt`) matches every
-row the previous pull wrote:
-
-```js
-// googleSync.js:75-83
-const locallyChanged = await prisma.schedule.findMany({
-  where: { userId, googleEventId: { not: null }, updatedAt: { gt: account.lastSyncedAt } },
-});
-```
-
-Those rows aren't in this run's `pulledIds` (nothing changed remotely), so step 3 pushes
-them back.
-
-**Impact.** One redundant `events.update` per pulled event on the sync immediately after
-each pull — wasted Google API quota, and a genuine correctness hole: a remote edit made
-in the window between the two runs is overwritten by the app's stale copy, inverting the
-documented "Google wins" policy. It is also the mechanism that turns BUG-04 from
-theoretical into routine.
-
-**Remediation.** Stamp `lastSyncedAt` after the pull completes, so the pull's own writes
-fall before the watermark.
-
-```js
-// server/services/googleSync.js — syncUser
-const { nextSyncToken, pulledIds } = await pull(account);
-const pullCompletedAt = new Date();     // everything the pull wrote is <= this
-...
-await prisma.googleAccount.update({
-  where: { id: account.id },
-  data: { syncToken: nextSyncToken || account.syncToken, lastSyncedAt: pullCompletedAt },
-});
-```
-
-`locallyChanged` is still snapshotted *before* the pull against the previous watermark,
-so real local edits made before this run are unaffected.
-
-> **Delivered** (`3cc83ac`), with the watermark placed later than the plan specified.
-> Stamping it right after the pull still leaves step 2's `googleEventId` writes on the
-> far side of it, so every freshly-pushed event was re-pushed once on the following
-> run. It is now taken after step 2 — the last local write of the run, since step 3
-> only reads and calls Google:
->
-> ```js
-> const localWritesCompletedAt = new Date();
-> ```
->
-> Three tests: a pulled event is not echoed back, a just-pushed event is not
-> re-pushed, and a genuine local edit *is* still pushed (guarding against the
-> over-correction of suppressing real edits).
-
-**Difficulty:** Easy (~30 min)
-
----
-
-### BUG-06
-
-#### An overdue recurring reminder fires a burst of duplicates
-
-**File:** `server/services/reminderScheduler.js:26-54`
-
-**Root cause.** The chained occurrence is computed from the *previous* fire time, not
-from now:
-
-```js
-const next = nextOccurrence(reminder.remindAt, reminder.recurrence);   // remindAt + 1 day
-if (next) { await prisma.reminder.create({ data: { ..., remindAt: next, sent: false } }); }
-```
-
-**Impact.** If the server is down for a week (Render free tier spins down), a DAILY
-reminder's chain is `T+1d`, still in the past → the next 30-second tick fires it again,
-creates `T+2d`, and so on. The user is hit with seven notifications in ~3.5 minutes.
-A monthly outage on a daily reminder produces ~30. Each also writes a row.
-
-**Remediation.** Advance past `now` before persisting the next occurrence.
-
-```js
-// server/services/reminderScheduler.js
-function nextFutureOccurrence(from, recurrence, now) {
-  let next = nextOccurrence(from, recurrence);
-  // Skip occurrences already in the past (e.g. after downtime) so a backlog
-  // collapses into a single upcoming reminder instead of a burst.
-  let guard = 0;
-  while (next && next <= now && guard < 1000) {
-    next = nextOccurrence(next, recurrence);
-    guard += 1;
-  }
-  return next;
-}
-```
-
-Call it as `nextFutureOccurrence(reminder.remindAt, reminder.recurrence, now)`. The
-`guard` bounds a pathological base date; `nextOccurrence` itself stays pure.
-
-**Tests to add** (`server/tests/scheduler.test.js`): a DAILY reminder five days overdue
-fires once and chains exactly one future occurrence.
-
-**Difficulty:** Easy (~30 min)
-
----
-
-### BUG-07
-
-#### `setInterval` over async work lets ticks overlap
-
-**Files:** `server/services/reminderScheduler.js:57-64` · `server/services/googleSyncScheduler.js:19-27`
-
-**Root cause.** Both schedulers fire on a fixed interval regardless of whether the
-previous invocation finished:
-
-```js
-timer = setInterval(() => { tick().catch(() => {}); }, intervalMs);
-```
-
-**Impact.** `reminderScheduler` emits over Socket.IO *before* marking `sent: true`
-(`:27` then `:34`), so an overlapping tick re-reads the same unsent rows and emits
-duplicate notifications. `googleSync` is worse — a slow sync (now slower still once
-BUG-03's pagination lands) can run concurrently with itself, double-inserting events
-that haven't had `googleEventId` written back yet. The same reasoning applies to running
-more than one server instance; that needs a DB-level claim, out of scope here.
-
-**Remediation.** Add a re-entrancy guard and chain with `setTimeout` in both files.
-
-```js
-let running = false;
-let timer = null;
-
-async function guardedTick() {
-  if (running) return;                     // previous tick still in flight
-  running = true;
-  try { await tick(); } catch { /* schedulers never throw */ }
-  finally { running = false; }
-}
-
-function startScheduler(intervalMs = 30000) {
-  if (timer) return timer;
-  const loop = () => {
-    timer = setTimeout(async () => { await guardedTick(); loop(); }, intervalMs);
-    if (timer.unref) timer.unref();
-  };
-  loop();
-  return timer;
-}
-```
-
-Also reorder `reminderScheduler.tick` to mark `sent: true` **before** `emitToUser`, so a
-crash between the two drops a reminder rather than duplicating it.
-
-Both modules export `tick` directly and the existing tests call it, so the tests keep
-working unchanged.
-
-**Difficulty:** Easy (~45 min for both)
-
----
-
-### BUG-08
-
-#### Document upload sends untruncated extracted text to the LLM
-
-**File:** `server/controllers/document.controller.js:22-37`
-
-**Root cause.** Stored content is capped, the summarization input is not:
-
-```js
-const text = await extractText(req.file.buffer, req.file.mimetype);
-const note = await prisma.note.create({
-  data: { ..., content: text.slice(0, MAX_STORED_CHARS) },   // capped at 100 000
-});
-...
-const result = await aiClient.summarize(text);               // full extraction
-```
-
-**Impact.** A 2 MB PDF can extract to well over a million characters (~250 k+ tokens).
-That exceeds most model context windows outright, and where it doesn't it produces a
-single request costing orders of magnitude more than intended — with a per-user AI rate
-limit of 60 calls / 15 min, this is a cheap way to run up the bill. It also pushes the
-request toward the 60 s `AI_TIMEOUT_MS` and its retry (see BUG-24).
-
-**Remediation.** Summarize what was actually stored, and make the cap explicit.
-
-```js
-// server/controllers/document.controller.js
-const MAX_STORED_CHARS = 100000;
-// Cap what we hand the LLM independently: a long document must not blow the
-// model's context window or the user's AI budget.
-const MAX_SUMMARY_CHARS = 40000;
-
-const stored = text.slice(0, MAX_STORED_CHARS);
-const note = await prisma.note.create({ data: { ..., content: stored } });
-...
-const result = await aiClient.summarize(stored.slice(0, MAX_SUMMARY_CHARS));
-```
-
-**Tests to add** (`server/tests/document.test.js`): upload a file larger than the cap and
-assert the mocked `aiClient.summarize` receives at most `MAX_SUMMARY_CHARS`.
-
-**Difficulty:** Easy (~20 min)
-
----
-
-### BUG-09
-
-#### Pomodoro counts interval ticks instead of wall-clock time
-
-**File:** `client/src/components/PomodoroTimer.jsx:63-71`
-
-**Root cause.** Elapsed time is incremented once per timer callback:
-
-```js
-intervalRef.current = setInterval(() => {
-  elapsedRef.current += 1;                   // assumes exactly 1 s per tick
-  const left = plannedRef.current - elapsedRef.current;
-  ...
-}, 1000);
-```
-
-**Impact.** Browsers throttle background-tab timers to roughly once per minute. A user
-who starts a 25-minute focus session and switches tabs sees the countdown crawl, and on
-return `elapsedRef` may read ~25 s for 25 real minutes. Since `stop()` posts that value
-and the server clamps it downward only (`Math.min(clientSeconds, wallClock)`), the
-session is recorded as ~25 seconds. Focus analytics — a headline README metric — silently
-under-report, and the timer never auto-completes while backgrounded.
-
-**Remediation.** Track a monotonic start instant and derive elapsed from it, keeping the
-interval purely as a repaint trigger.
-
-```js
-const runStartRef = useRef(0);       // Date.now() when the current run segment began
-const bankedRef  = useRef(0);        // active seconds accumulated across prior segments
-
-const beginInterval = useCallback(() => {
-  clearTick();
-  runStartRef.current = Date.now();
-  intervalRef.current = setInterval(() => {
-    const live = Math.round((Date.now() - runStartRef.current) / 1000);
-    elapsedRef.current = bankedRef.current + live;
-    const left = plannedRef.current - elapsedRef.current;
-    setSecondsLeft(left > 0 ? left : 0);
-    if (left <= 0) stop();
-  }, 1000);
-}, [stop]);
-
-const pause = () => {
-  bankedRef.current += Math.round((Date.now() - runStartRef.current) / 1000);
-  clearTick();
-  setPaused(true);
-};
-```
-
-`start()` resets `bankedRef.current = 0`; the mount-time recovery path already computes
-elapsed from `session.startedAt`, so set `bankedRef.current` there instead of
-`elapsedRef.current` and the two paths converge.
-
-**Tests to add** (`client/src/test/pomodoro.test.jsx`): with fake timers, advance
-`Date.now()` by 60 s while firing only one interval callback; assert the countdown
-dropped by ~60 s.
-
-**Difficulty:** Medium (~1 h — the pause/resume/recover interaction needs care)
-
----
-
-### BUG-10
-
-#### A 401 clears the token but leaves the app in a logged-in state
-
-**File:** `client/src/lib/api.js:32-40`
-
-**Root cause.** The interceptor drops the token but nothing tells `AuthContext`:
-
-```js
-api.interceptors.response.use((res) => res, (error) => {
-  if (error.response?.status === 401) { setToken(null); }
-  return Promise.reject(error);
-});
-```
-
-`AuthContext.user` stays populated, and `ProtectedRoute` only reads `user`.
-
-**Impact.** After a token is revoked server-side (logout elsewhere, password change, or
-the 7-day expiry), the user keeps seeing the full authenticated shell while every request
-fails. There is no redirect to login until a manual reload.
-
-**Remediation.** Broadcast the session loss and have `AuthProvider` listen.
-
-```js
-// client/src/lib/api.js
-export const SESSION_EXPIRED_EVENT = 'pa:session-expired';
-
-api.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    if (error.response?.status === 401) {
-      setToken(null);
-      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
-    }
-    return Promise.reject(error);
-  }
+// auth.controller.js:151
+const challengeToken = signToken(
+  { sub: account.id, purpose: '2fa', ver: account.tokenVersion ?? 0 },
+  { expiresIn: CHALLENGE_TTL }
 );
 ```
 
-```jsx
-// client/src/context/AuthContext.jsx — inside AuthProvider
-useEffect(() => {
-  const onExpired = () => setUser(null);
-  window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
-  return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
-}, []);
-```
+Adding `ver` also means a logout or password change invalidates an outstanding
+challenge, which it currently does not.
 
-`ProtectedRoute` then redirects on the next render, and `NotificationContext`'s effect
-(keyed on `user`) tears the socket down for free.
+### Regression test
 
-**Tests to add** (`client/src/test/apiError.test.js` or `app.test.jsx`): dispatching the
-event clears `user` and renders the login route.
-
-**Difficulty:** Easy (~30 min)
-
----
-
-### BUG-11
-
-#### Analytics, AI usage, and focus stats read whole tables per request
-
-**Files:** `server/controllers/analytics.controller.js:9-15, 50` · `server/controllers/ai.controller.js:209` · `server/controllers/focus.controller.js:71`
-
-**Root cause.** Each endpoint pulls every row the user has ever created and aggregates
-in JS:
+Add to `server/tests/twoFactor.test.js`:
 
 ```js
-// analytics.controller.js:9-15
-prisma.task.findMany({ where: { userId: req.user.id } }),         // no take, no select
-prisma.focusSession.findMany({ where: { userId: req.user.id } }),
-prisma.habit.findMany({ where: { userId: req.user.id } }),
-prisma.habitLog.findMany({ where: { userId: req.user.id } }),
+test('the 2FA challenge token cannot be used as a session token', async () => {
+  const login = await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'tfa@b.com', password: 'password123' });
+  expect(login.body.twoFactorRequired).toBe(true);
 
-// ai.controller.js:209 — every AiUsage row, to report the last 7 days
-const rows = await prisma.aiUsage.findMany({ where: { userId: req.user.id } });
-
-// focus.controller.js:71 — every session ever, to report a 7-day chart
-const sessions = await prisma.focusSession.findMany({ where: { userId: req.user.id } });
-```
-
-**Impact.** Cost grows without bound in row count and in row *width* — `task.findMany`
-with no `select` also drags the 1024-dimension `embedding` column (~4 KB/row) across the
-wire for a query that only needs `status`, `dueDate`, `completedAt`, and `tags`. The
-Dashboard hits `/analytics/summary` on every mount. A year-old account makes this the
-slowest endpoint in the app.
-
-**Remediation.** Bound the window and narrow the projection. Lowest-risk first pass:
-
-```js
-// analytics.controller.js — summary()
-const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-const [tasks, sessions, habits, habitLogs] = await Promise.all([
-  prisma.task.findMany({
-    where: { userId },
-    select: { status: true, dueDate: true, completedAt: true, tags: true },  // never `embedding`
-  }),
-  prisma.focusSession.findMany({
-    where: { userId, startedAt: { gte: since } },
-    select: { startedAt: true, seconds: true, taskId: true },
-  }),
-  prisma.habit.findMany({ where: { userId }, select: { id: true } }),
-  prisma.habitLog.findMany({ where: { userId, date: { gte: since } }, select: { habitId: true, date: true } }),
-]);
-```
-
-Apply the same `{ createdAt: { gte: since } }` bound in `ai.controller.usage` and
-`{ startedAt: { gte: since } }` in `focus.controller.stats`. Note that this changes the
-semantics of the `total` / `totalCostUsd` fields from all-time to windowed — either
-rename them or compute the all-time figure with a separate `prisma.*.aggregate()` call,
-which pushes the sum into Postgres.
-
-**Tests to add:** existing analytics/usage/focus tests cover the shape; add one asserting
-rows outside the window are excluded from `perDay` but still counted in the aggregate
-total (whichever semantics you pick).
-
-> **Delivered** (`c867fa8`). The contract question the plan flagged was resolved in
-> favour of **windowed, explicitly labelled** rather than a silent semantic change:
->
-> - `GET /api/ai/usage` takes an optional `?days=` (clamped 7–365, default 30) and
->   returns `windowDays`; the Analytics card renders "last 30 days" beside the title
->   so windowed totals cannot be misread as all-time.
-> - `GET /api/focus/stats` scopes `total` and `perTask` to the same 7 days it charts,
->   and returns `windowDays`.
-> - Task counts in `summary`/`trends` are all-time *by definition*, so those reads
->   stay unbounded — but are now projected to four columns, which also stops the
->   1024-dimension `embedding` (~4KB/row) being dragged along.
->
-> `fakePrisma` gained `select` support so the projections are actually verified.
-
-**Difficulty:** Medium (~1.5 h — decide the all-time vs. windowed contract first)
-
----
-
-### BUG-12
-
-#### `vitest` / `vite` dependency advisories
-
-**File:** `client/package.json`
-
-**Root cause.** `npm audit` in `client/` reports 5 advisories, all reached through the
-Vite/Vitest dev toolchain:
-
-| Package | Severity | Advisory |
-| --- | --- | --- |
-| `vitest` | critical | arbitrary file read/execute when the Vitest UI server is listening |
-| `vite` | high | path traversal in optimized-deps `.map` handling; `server.fs.deny` bypass on Windows |
-| `esbuild` | moderate | any website can send requests to the dev server and read the response |
-| `@vitest/mocker`, `vite-node` | moderate | transitive on `vite` |
-
-**Impact.** These are **dev-only** — nothing here ships in `dist/`, and the server has 0
-production vulnerabilities. Exposure is limited to developers running `npm run dev` or
-`vitest --ui` on an untrusted network. Not a production incident, but it should not sit
-in the audit output indefinitely.
-
-**Remediation.** `npm audit fix --force` proposes `vite@8`, a major bump that will also
-drag `vitest` to a new major. Do this deliberately, not as part of a bug-fix batch:
-
-```bash
-cd client
-npm i -D vite@^8 vitest@^4 @vitejs/plugin-react@latest
-npm test && npm run build && npm run lint
-```
-
-Expect churn in `vite.config.js` (Vitest config moved out of `defineConfig`'s `test` key
-in recent majors) and in `src/test/setup.js`. Worth its own commit and its own slice.
-
-> **Delivered** (`4a28cbd`) — `vite@8.2.1`, `vitest@4.1.10`, `@vitejs/plugin-react@6`,
-> `jsdom@latest`. **`npm audit` now reports 0 vulnerabilities.**
->
-> Config migration needed three changes, two of which the plan did not anticipate:
-> - `defineConfig` imported from `vitest/config` so the `test` block is still honoured
->   *(anticipated)*.
-> - Vite 8 bundles with **rolldown**, which rejects the object form of `manualChunks`
->   — rewritten as a function; the `react` and `charts` chunks still split as before.
-> - `__dirname` → `import.meta.dirname`; Vite 8's native config loader does not
->   provide the CJS globals.
->
-> `src/test/setup.js` needed no change, and no test required modification. Verified:
-> 40 tests green on Vitest 4, production build clean with chunking intact, SW
-> build-id stamping still applied in `dist/sw.js`, dev server serves HTTP 200.
-
-**Difficulty:** Medium (~2 h — major-version upgrade with config migration)
-
----
-
-## 🟡 Low
-
-### BUG-13
-
-#### Keyword search starves tasks when notes fill the limit
-
-**File:** `server/controllers/search.controller.js:43-58`
-
-Both queries use `take: limit`, then the concatenation is truncated notes-first:
-
-```js
-return [...notes.map(...), ...tasks.map(...)].slice(0, limit);
-```
-
-With `limit` at its default 10, eleven matching notes mean **no task ever appears**.
-Interleave instead of concatenating, or query `take: limit` from each and round-robin:
-
-```js
-const merged = [];
-for (let i = 0; i < Math.max(noteResults.length, taskResults.length); i += 1) {
-  if (noteResults[i]) merged.push(noteResults[i]);
-  if (taskResults[i]) merged.push(taskResults[i]);
-}
-return merged.slice(0, limit);
-```
-
-**Difficulty:** Easy (~20 min)
-
----
-
-### BUG-14
-
-#### Semantic relevance score can be negative
-
-**File:** `server/controllers/search.controller.js:39`
-
-```js
-.map((r) => ({ ..., score: 1 - Number(r.distance) }))
-```
-
-pgvector's `<=>` is cosine *distance* in `[0, 2]`, so `score` lands in `[-1, 1]`. Any
-result more than 90° from the query renders as a negative relevance. Use
-`score: Math.max(0, 1 - Number(r.distance))`, or normalise as `1 - distance / 2` for a
-true `[0, 1]` scale. The client doesn't display `score` today, so this is latent.
-
-**Difficulty:** Easy (~10 min)
-
----
-
-### BUG-15
-
-#### Habit check-in race returns 500 instead of being idempotent
-
-**File:** `server/controllers/habit.controller.js:78-86`
-
-`checkIn` does find-then-create against the `@@unique([habitId, date])` constraint. Two
-concurrent requests (double-tap, or a retry over a flaky connection) both see no row,
-both insert, and the loser gets a Prisma `P2002` surfaced as a 500 — despite the comment
-promising idempotency. Replace with an atomic upsert:
-
-```js
-await prisma.habitLog.upsert({
-  where: { habitId_date: { habitId: habit.id, date } },
-  update: {},
-  create: { habitId: habit.id, userId: req.user.id, date },
+  const challenge = login.body.challengeToken;
+  expect((await request(app).get('/api/auth/me').set(bearer(challenge))).status).toBe(401);
+  expect((await request(app).get('/api/tasks').set(bearer(challenge))).status).toBe(401);
 });
 ```
 
-`server/tests/helpers/fakePrisma.js` will need `habitLog.upsert` support.
-
-**Difficulty:** Easy (~30 min incl. the fake-Prisma helper)
+**Difficulty:** 🟢 Easy (~20 min incl. tests). **Priority: fix first — this is live on `main`.**
 
 ---
 
-### BUG-16
+<a id="bug-02"></a>
+## BUG-02 — 🔴 High — `POST /billing/verify` does not bind the subscription to the caller
 
-#### Reminder `taskId` is never ownership-checked
+**File:** `server/controllers/billing.controller.js:61-78`
 
-**Files:** `server/controllers/reminder.controller.js` · `server/validators/reminder.schema.js:12, 21`
+### Root cause
 
-`create` and `update` accept any UUID as `taskId` and write it straight through. There's
-no FK on `Reminder.taskId` in the schema, so nothing rejects another user's task id. The
-value is echoed back to the client and into the Socket.IO reminder payload. Low impact —
-the attacker learns nothing they didn't supply — but it violates the user-scoping
-invariant and will bite when someone adds a join. Mirror the `focus.controller.start`
-check:
+`verify` takes `razorpay_subscription_id` straight from the request body, checks the
+HMAC, and upgrades **whoever is authenticated** (`billing.controller.js:70-76`):
 
 ```js
-if (data.taskId) {
-  const task = await prisma.task.findFirst({ where: { id: data.taskId, userId: req.user.id } });
-  if (!task) throw ApiError.notFound('Task not found');
+if (!razorpay.verifyPaymentSignature({ paymentId, subscriptionId, signature })) {
+  throw ApiError.badRequest('Payment verification failed');
 }
-```
-
-**Difficulty:** Easy (~20 min)
-
----
-
-### BUG-17
-
-#### Login timing side channel enables user enumeration
-
-**File:** `server/controllers/auth.controller.js:40-54`
-
-An unknown email returns immediately; a known one costs a bcrypt round (~100 ms at 10
-rounds). The response body is correctly identical, but the timing is not, so an attacker
-can enumerate registered addresses. `authLimiter` (30 attempts / 15 min / IP) slows but
-doesn't prevent this. Burn an equivalent compare on the miss path:
-
-```js
-// Compare against a dummy hash so a missing user costs the same as a wrong password.
-const DUMMY_HASH = bcrypt.hashSync('unused-placeholder-password', SALT_ROUNDS);
-
-const user = await prisma.user.findUnique({ where: { email: data.email } });
-if (!user) {
-  await bcrypt.compare(data.password, DUMMY_HASH);
-  throw ApiError.unauthorized('Invalid email or password');
-}
-```
-
-**Difficulty:** Easy (~20 min)
-
----
-
-### BUG-18
-
-#### Concurrent open focus sessions accumulate as orphans
-
-**File:** `server/controllers/focus.controller.js:19-39`
-
-`start` never checks for an already-open session. Two tabs, or a start after a crashed
-client, leave rows with `endedAt: null` forever; `active()` returns only the newest
-(`orderBy: { startedAt: 'desc' }`), so the rest are invisible and permanently stuck at
-`seconds: 0`. Close any dangling session on start:
-
-```js
-// Close any session left open by another tab or a crashed client, capping it at
-// its planned duration so orphaned time can't be inflated.
-await prisma.focusSession.updateMany({
-  where: { userId: req.user.id, endedAt: null },
-  data: { endedAt: now },
+const updated = await prisma.user.update({
+  where: { id: req.user.id },
+  data: { plan: 'PAID', subscriptionStatus: 'active', razorpaySubscriptionId: subscriptionId },
 });
 ```
 
-For an exact `seconds` value on the closed rows, fetch and update them individually
-reusing the clamping logic in `stop`.
+The signature is `HMAC(paymentId|subscriptionId)` keyed by the **shared account secret**.
+It proves *a payment happened* — not *this user made it*. Anyone who has completed one
+real payment holds a permanently valid `(paymentId, subscriptionId, signature)` triple
+and can POST it from any number of other accounts, each of which is upgraded to `PAID`.
 
-**Difficulty:** Easy (~30 min)
+Two things make it worse:
 
----
+- `checkout` already stored the correct `razorpaySubscriptionId` on the calling user
+  (line 52), so the data needed to bind the payment is present and simply unused.
+- `verify` sets `plan: 'PAID'` but leaves `planRenewsAt` untouched (`null`), and
+  `config/plans.js:isPaid` treats a null renewal date as **an open-ended grant**. A
+  replayed signature therefore yields *permanent* paid access, not a period-limited one.
 
-### BUG-19
+The knock-on: `applySubscriptionEvent` resolves the owner with
+`findFirst({ where: { razorpaySubscriptionId } })`, so once several users share a
+subscription id, webhook events are applied to an arbitrary one of them.
 
-#### Service-worker cache name is static, so old assets are never evicted
+### Remediation
 
-**File:** `client/public/sw.js:7`
-
-`const CACHE = 'pa-shell-v1';` never changes, so the `activate` handler's cleanup
-(`keys.filter((k) => k !== CACHE)`) has nothing to delete. Vite emits content-hashed
-filenames, so every deploy adds a fresh set of entries and the old ones accumulate in
-Cache Storage indefinitely. Stamp the cache name at build time (e.g. inject the package
-version or a build hash), or prune entries not in the current asset manifest during
-`activate`.
-
-**Difficulty:** Easy (~30 min)
-
----
-
-### BUG-20
-
-#### No graceful shutdown on SIGTERM
-
-**File:** `server/server.js`
-
-Render sends `SIGTERM` on redeploy and scale-down. Nothing handles it, so in-flight
-requests are cut and the Prisma pool is never drained.
+**`server/controllers/billing.controller.js`** — replace the body of `verify` between
+the signature check and the update:
 
 ```js
-// server/server.js
-for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => {
-    server.close(async () => {
-      const { stopScheduler } = require('./services/reminderScheduler');
-      stopScheduler();
-      await require('./models/prisma').$disconnect();
-      process.exit(0);
-    });
-    // Don't hang forever on a stuck connection.
-    setTimeout(() => process.exit(1), 10000).unref();
+  if (!razorpay.verifyPaymentSignature({ paymentId, subscriptionId, signature })) {
+    throw ApiError.badRequest('Payment verification failed');
+  }
+
+  // The signature proves a payment happened, not that it belongs to this account.
+  // Bind it to the subscription this user actually opened in `checkout`.
+  const caller = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (caller.razorpaySubscriptionId !== subscriptionId) {
+    throw ApiError.badRequest('This payment does not belong to your account.');
+  }
+
+  // Never let one subscription grant paid access to two accounts.
+  const claimed = await prisma.user.findFirst({
+    where: { razorpaySubscriptionId: subscriptionId, id: { not: req.user.id } },
   });
-}
+  if (claimed) {
+    throw ApiError.badRequest('This subscription is already linked to another account.');
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.user.id },
+    data: { plan: 'PAID', subscriptionStatus: 'active' },
+  });
 ```
 
-**Difficulty:** Easy (~20 min)
+`razorpaySubscriptionId` is dropped from the update — it was already set by `checkout`
+and re-writing it from user input is what allowed the takeover.
+
+**Also close the open-ended-grant gap.** Either set a provisional renewal date here so
+an unconfirmed upgrade cannot outlive its period:
+
+```js
+  // Provisional: the webhook is the source of truth and will correct this.
+  data: { plan: 'PAID', subscriptionStatus: 'active', planRenewsAt: new Date(Date.now() + 32 * 864e5) },
+```
+
+…or reserve `planRenewsAt: null` strictly for admin grants and have `isPaid` require a
+date whenever `subscriptionStatus` is set. The first is the smaller change.
+
+### Regression test
+
+Add to `server/tests/billing.test.js`:
+
+```js
+test('a valid signature cannot upgrade an account that did not open the subscription', async () => {
+  // userA opens the subscription; userB replays A's signature.
+  const res = await request(app)
+    .post('/api/billing/verify')
+    .set(bearer(userBToken))
+    .send({
+      razorpay_payment_id: 'pay_1',
+      razorpay_subscription_id: 'sub_of_user_a',
+      razorpay_signature: validSignatureForUserA,
+    });
+  expect(res.status).toBe(400);
+  const b = await prisma.user.findUnique({ where: { id: userBId } });
+  expect(b.plan).toBe('FREE');
+});
+```
+
+**Difficulty:** 🟢 Easy (~40 min incl. tests).
 
 ---
 
-### BUG-21
+<a id="bug-03"></a>
+## BUG-03 — 🟠 Medium — failing client test: Vitest 4 rejects an arrow-function mock used as a constructor
 
-#### Missing composite indexes on the hot scheduler and usage queries
+**File:** `client/src/test/billing.test.jsx:47`
 
-**File:** `server/prisma/schema.prisma:265-267, 247-248`
+### Root cause
 
-`Reminder` indexes `userId`, `remindAt`, and `sent` separately, but the scheduler's
-30-second query filters on the pair:
+**This is the one red test in the repo.** The product code is correct; the test's mock is not.
+
+`client/src/pages/Settings.jsx:160` calls the Razorpay checkout as a constructor:
 
 ```js
-prisma.reminder.findMany({ where: { sent: false, remindAt: { lte: now } }, take: 100 });
+const Razorpay = await loadRazorpayCheckout();
+const rzp = new Razorpay({ ... });
+rzp.open();
 ```
 
-Postgres can only use one of the single-column indexes (or a bitmap-and), and the `sent`
-index is near-useless on its own — it is a two-value boolean that becomes overwhelmingly
-`true` over time. Same story for `AiUsage` once BUG-11's date bound lands.
+The test mocks it with an **arrow function**:
+
+```js
+window.Razorpay = vi.fn(() => ({ open }));
+```
+
+The `vitest 2 → 4` upgrade (commit `4a28cbd`, the previous audit's BUG-12 fix) changed
+mock semantics: a `vi.fn()` whose implementation is an arrow function can no longer be
+invoked with `new`. Confirmed directly:
+
+```
+ARROW    new -> THREW: () => ({ open }) is not a constructor
+FUNCTION new -> ok
+```
+
+Vitest even warns about it in the run output (`The vi.fn() mock did not use 'function'
+or 'class' in its implementation`).
+
+So `new Razorpay(...)` throws inside `upgrade()`, the `catch (err)` at
+`Settings.jsx:181` swallows it into an error toast, and `open` is never called —
+`expect(open).toHaveBeenCalled()` fails after a 1s `waitFor` timeout.
+
+### Remediation
+
+**`client/src/test/billing.test.jsx:47`** — use a real function (or a class) so the mock
+is constructible:
+
+```js
+    const open = vi.fn();
+    // Must be a `function`, not an arrow: Vitest 4 will not call an arrow-function
+    // mock implementation with `new`, and Settings does `new Razorpay(...)`.
+    window.Razorpay = vi.fn(function RazorpayMock() {
+      return { open };
+    });
+```
+
+The existing assertions then pass unchanged.
+
+**Worth fixing alongside (not required):** the `catch` in `Settings.jsx:181` turns a
+genuine programming error into a generic "Could not start checkout" toast, which is why
+this surfaced as a silent assertion timeout rather than a visible error. Logging the
+underlying error would make the next such failure obvious:
+
+```js
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('checkout failed', err);
+      setMsg({ ok: false, text: apiError(err, 'Could not start checkout') });
+    }
+```
+
+**Difficulty:** 🟢 Easy (~10 min).
+
+---
+
+<a id="bug-04"></a>
+## BUG-04 — 🟠 Medium — IPv6 clients bypass the global API rate limit
+
+**File:** `server/middleware/rateLimit.js:26`
+
+### Root cause
+
+```js
+keyGenerator: (req) => (req.user && req.user.id ? req.user.id : req.ip),
+```
+
+`express-rate-limit` v8 rejects this at construction and logs on every boot:
+
+```
+ValidationError: Custom keyGenerator appears to use request IP without calling the
+ipKeyGenerator helper function for IPv6 addresses. This could allow IPv6 users to
+bypass limits.  (ERR_ERL_KEY_GEN_IPV6)
+```
+
+A single IPv6 host is routinely allocated a whole `/64`. Keying on the full address
+gives each of ~1.8×10¹⁹ addresses in that prefix its own 200-req/min bucket, so the
+global cap is trivially defeated by address rotation. The library's `ipKeyGenerator`
+helper exists precisely to collapse an IPv6 address to its `/64` prefix.
+
+### Remediation
+
+**`server/middleware/rateLimit.js`** — import the helper and use it on the IP branch:
+
+```js
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
+```
+
+```js
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.API_RATE_LIMIT_MAX || '200', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // ipKeyGenerator collapses an IPv6 address to its /64 prefix, so a client cannot
+  // rotate through its allocation to get a fresh bucket per address.
+  keyGenerator: (req) => (req.user && req.user.id ? req.user.id : ipKeyGenerator(req.ip)),
+  message: { error: { message: 'Too many requests. Please slow down and try again shortly.' } },
+});
+```
+
+`authLimiter` uses the default key generator and is unaffected. `aiLimiter` falls back
+to the constant `'anonymous'` rather than an IP, so it is also unaffected.
+
+This silences the boot-time `ValidationError` as a side effect.
+
+### Regression test
+
+Extend `server/tests/apiLimiter.test.js` to assert two addresses in one `/64` share a
+bucket:
+
+```js
+test('IPv6 addresses in the same /64 share one bucket', async () => {
+  const a = '2001:db8:1:2::1';
+  const b = '2001:db8:1:2::dead';
+  expect((await request(app).get('/ping').set('X-Forwarded-For', a)).status).toBe(200);
+  expect((await request(app).get('/ping').set('X-Forwarded-For', b)).status).toBe(200);
+  expect((await request(app).get('/ping').set('X-Forwarded-For', b)).status).toBe(429);
+});
+```
+
+**Difficulty:** 🟢 Easy (~20 min).
+
+---
+
+<a id="bug-05"></a>
+## BUG-05 — 🟠 Medium — `apiLimiter`'s per-user keying branch never executes
+
+**Files:** `server/app.js:49,63` · `server/middleware/rateLimit.js:26`
+
+### Root cause
+
+The limiter is documented as *"Keyed by user id once authenticated, otherwise by IP."*
+It never is. Express runs middleware in registration order, and in `app.js`:
+
+```js
+app.use('/api', apiLimiter);            // line 49  — runs first
+...
+app.use('/api', requestContext, routes); // line 63  — requireAuth lives in here
+```
+
+`requireAuth` is mounted inside `routes`, so at the moment `apiLimiter` computes its
+key, `req.user` is always `undefined`. **Every request is keyed by IP**, and the
+`req.user.id` branch is unreachable in production.
+
+Consequences:
+
+- Users behind one shared egress IP — office NAT, university, mobile CGNAT, or a
+  corporate VPN — share a single 200 req/min bucket and throttle each other. With a
+  chatty SPA this is a realistic false-positive 429 for legitimate users.
+- The intended per-account fairness (and its abuse-limiting value against a stolen
+  token) does not exist.
+- `tests/apiLimiter.test.js` mounts the limiter standalone with no auth, so it only
+  ever exercises the IP path — which is why the dead branch was not caught.
+
+### Remediation
+
+Move the limiter behind authentication resolution, so an authenticated request is
+keyed by user id and only anonymous traffic falls back to IP. The smallest correct
+change is to mount it inside `routes` after `requireAuth` — but `requireAuth` is
+applied per-router, so the cleanest option that preserves current coverage is a
+lightweight identity pre-pass in `app.js`:
+
+**`server/app.js`** — replace line 49:
+
+```js
+    // Resolve the caller's identity (best-effort, non-blocking) *before* the limiter
+    // so it can key by user id; requireAuth still does the real enforcement later.
+    app.use('/api', attachUserIfPresent, apiLimiter);
+```
+
+**`server/middleware/auth.js`** — add and export:
+
+```js
+// Best-effort identity for middleware that runs before requireAuth (the rate
+// limiter). Never rejects: a missing or bad token simply leaves req.user unset and
+// requireAuth produces the real 401 further down the stack.
+async function attachUserIfPresent(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return next();
+  try {
+    const payload = verifyToken(token);
+    if (payload.purpose && payload.purpose !== 'session') return next(); // see BUG-01
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    if (user && (payload.ver ?? 0) === (user.tokenVersion ?? 0)) {
+      req.user = { id: user.id };
+    }
+  } catch {
+    /* anonymous — the limiter falls back to IP */
+  }
+  return next();
+}
+```
+
+**Trade-off to weigh before approving:** this adds one `findUnique` per API request
+ahead of the limiter, and `requireAuth` then repeats it. If that cost is unwelcome,
+the alternative is to accept IP-only keying and **delete the dead branch plus the
+misleading comment** so the code states what it actually does. Either is defensible;
+the second is free. Recommend the first only if shared-NAT false positives are a real
+concern for the user base.
+
+**Difficulty:** 🟡 Moderate (~1 h) for the keying fix; 🟢 Easy (~5 min) to just remove
+the dead branch.
+
+---
+
+<a id="bug-06"></a>
+## BUG-06 — 🟠 Medium — TOTP codes are replayable within their validity window
+
+**File:** `server/controllers/auth.controller.js:382` · `server/services/totp.js:74`
+
+### Root cause
+
+`loginTwoFactor` verifies the code and issues a session, but nothing records that the
+code was used:
+
+```js
+if (totp.verify(secretCrypto.decrypt(user.twoFactorSecret), code)) {
+  tfaReset(user.id);
+  return res.json({ user: serializeUser(user), token: issueToken(user) });
+}
+```
+
+`totp.verify` accepts a ±1 step window around a 30 s period, so **each 6-digit code
+stays valid for up to 90 seconds and can be redeemed an unlimited number of times**
+in that window. RFC 6238 §5.2 requires the verifier to reject a previously accepted
+code.
+
+Realistic exploit: an attacker who has the password and observes one code — phishing
+proxy, shoulder-surf, a code pasted into the wrong window, malware reading the
+notification shade — can redeem it in parallel with the legitimate login. The
+per-account throttle (`tfaLocked`) only counts *failures*, so it does not help.
+
+### Remediation
+
+Persist the last accepted time-step and refuse anything at or below it. Add a column:
+
+**`server/prisma/schema.prisma`** (on `model User`, near the other 2FA fields):
 
 ```prisma
-// model Reminder — replace @@index([sent])
-@@index([sent, remindAt])
-
-// model AiUsage — replace @@index([createdAt])
-@@index([userId, createdAt])
-
-// model FocusSession — supports both active() and the windowed stats query
-@@index([userId, startedAt])
+  twoFactorLastStep       Int?
 ```
 
-Render applies these via `prisma db push` on deploy — no migration file needed, matching
-the pattern noted in `ROADMAP.md`.
-
-**Difficulty:** Easy (~20 min)
-
----
-
-### BUG-22
-
-#### Non-ASCII internal-key header raises 500 instead of 401
-
-**File:** `ai-service/main.py:42-46`
-
-`hmac.compare_digest` raises `TypeError` when either `str` argument contains non-ASCII
-characters. A caller sending `X-Internal-Key: café` gets an unhandled 500 rather than a
-clean 401 — an error-shape inconsistency and a small information leak in the traceback.
-
-```python
-def require_internal_key(x_internal_key: str = Header(default="")):
-    settings = get_settings()
-    # Compare as bytes: compare_digest rejects non-ASCII str inputs with TypeError.
-    if not hmac.compare_digest(
-        x_internal_key.encode("utf-8"), settings.internal_api_key.encode("utf-8")
-    ):
-        raise HTTPException(status_code=401, detail="Invalid internal key")
-```
-
-Byte comparison keeps the constant-time property. Add a case to
-`ai-service/tests/test_config_security.py`.
-
-> **Delivered** (`6e67cca`), with a corrected test. The plan's version sends the
-> header as a `str`, but httpx refuses to encode a non-ASCII str header client-side —
-> the request never reaches the app. Real HTTP headers are bytes, which Starlette
-> decodes as latin-1, so the test sends `b"caf\xe9"` and the dependency receives
-> `'café'`. Confirmed the bug and the fix directly:
->
-> ```
-> hmac.compare_digest('café', 'dev-internal-key')  → TypeError  (this was the 500)
-> hmac.compare_digest(b'caf\xc3\xa9', b'dev-...')  → False      (clean 401)
-> ```
->
-> The new test was verified to **fail against the previous implementation** and pass
-> against this one. Landed in `tests/test_ai.py` (alongside the existing
-> `test_requires_internal_key`) rather than `test_config_security.py`, since it
-> exercises the endpoint dependency rather than config validation.
-
-**Difficulty:** Easy (~15 min)
-
----
-
-### BUG-23
-
-#### `act()` warnings from `PomodoroTimer` in the client suite
-
-**File:** `client/src/components/PomodoroTimer.jsx:20` (via `client/src/test/pomodoro.test.jsx`)
-
-The suite passes but logs `An update to PomodoroTimer inside a test was not wrapped in
-act(...)`. The mount effect's three unawaited promise chains (`taskService.list`,
-`loadToday`, `focusService.active`) resolve after the test's synchronous body. Wrap the
-render's settle in `await waitFor(...)` / `await act(...)` in the test. Worth clearing
-alongside BUG-09, which touches the same component — real regressions currently hide in
-this noise.
-
-**Difficulty:** Easy (~20 min)
-
----
-
-### BUG-24
-
-#### Worst-case 121.5 s AI request with no server-side deadline
-
-**File:** `server/services/aiClient.js:12-14, 60-85`
-
-`TIMEOUT_MS` defaults to 60 s, `MAX_RETRIES` is 1, `RETRY_DELAY_MS` is 1.5 s — so a
-fully hung AI service holds an Express worker and the browser connection for just over
-two minutes before the graceful 503 is returned. That is far past any reasonable user
-patience and past most proxy idle timeouts, so the client typically sees a proxy error
-rather than the friendly "service is waking up" message `apiError` was written for.
-
-The 60 s budget is a deliberate accommodation for Render free-tier cold starts
-(commit `e5fcff1`), so don't simply lower it. Instead cap the *total* wall clock across
-attempts, and leave headroom under the platform's own timeout:
+**`server/services/totp.js`** — return which step matched instead of just a boolean:
 
 ```js
-// Total budget across all attempts, so a hung AI service can't pin a request
-// past the proxy's idle timeout.
-const TOTAL_BUDGET_MS = parseInt(process.env.AI_TOTAL_BUDGET_MS || '75000', 10);
-
-async function call(path, body) {
-  const deadline = Date.now() + TOTAL_BUDGET_MS;
-  let lastErr;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
-    try {
-      const res = await client.post(path, body, { timeout: Math.min(TIMEOUT_MS, remaining) });
-      recordUsage(path, res.headers);
-      return res.data;
-    } catch (err) {
-      lastErr = err;
-      if (attempt < MAX_RETRIES && isRetryable(err) && Date.now() + RETRY_DELAY_MS < deadline) {
-        await sleep(RETRY_DELAY_MS);
-        continue;
-      }
-      break;
-    }
+// Verify a code against the secret, allowing ±`window` steps for clock skew.
+// Returns the matching counter (time step) so the caller can reject a replay, or
+// null when no step matches.
+function verifyStep(secretBase32, code, window = 1) {
+  if (!secretBase32 || !code) return null;
+  const clean = String(code).replace(/\s/g, '');
+  if (!/^\d{6}$/.test(clean)) return null;
+  const counter = currentCounter();
+  for (let w = -window; w <= window; w += 1) {
+    if (hotp(secretBase32, counter + w) === clean) return counter + w;
   }
-  ...
+  return null;
+}
+
+// Kept for callers that only need a yes/no (enrolment, disable).
+function verify(secretBase32, code, window = 1) {
+  return verifyStep(secretBase32, code, window) !== null;
 }
 ```
 
-`server/tests/aiClient.test.js` already covers the retry paths and should keep passing.
+Export `verifyStep` alongside `verify`.
 
-**Difficulty:** Easy (~30 min)
+**`server/controllers/auth.controller.js:382`** — reject a reused step:
+
+```js
+  const step = totp.verifyStep(secretCrypto.decrypt(user.twoFactorSecret), code);
+  if (step !== null) {
+    // RFC 6238 §5.2: a code is single-use. Without this a code stays redeemable for
+    // its whole ±1-step (~90 s) window.
+    if (user.twoFactorLastStep !== null && step <= user.twoFactorLastStep) {
+      tfaRecordFailure(user.id);
+      throw ApiError.unauthorized('That code has already been used. Wait for the next one.');
+    }
+    tfaReset(user.id);
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { twoFactorLastStep: step },
+    });
+    return res.json({ user: serializeUser(updated), token: issueToken(updated) });
+  }
+```
+
+**Deploy note:** the new column is applied by Render's `prisma db push`, consistent with
+the existing convention in `ROADMAP.md` — no migration file needed.
+
+### Regression test
+
+```js
+test('a TOTP code cannot be redeemed twice', async () => {
+  const code = codeFor(secret);
+  const first = await request(app).post('/api/auth/2fa/login').send({ challengeToken, code });
+  expect(first.status).toBe(200);
+
+  const { body } = await login('tfa@b.com');
+  const second = await request(app)
+    .post('/api/auth/2fa/login')
+    .send({ challengeToken: body.challengeToken, code });
+  expect(second.status).toBe(401);
+});
+```
+
+**Difficulty:** 🟡 Moderate (~1.5 h incl. schema + tests).
 
 ---
 
-## Sequencing (as executed)
+<a id="bug-07"></a>
+## BUG-07 — 🟠 Medium — backup-code consumption is a read-modify-write race
 
-Each group shipped as an independently verified slice with its own tests, per `CLAUDE.md`.
+**Files:** `server/controllers/auth.controller.js:386-392` · `server/services/twoFactor.js:31`
 
-| # | Slice | Items | Commit |
+### Root cause
+
+Consuming a one-time backup code reads the array, filters in JS, and writes the
+remainder back — three separate steps with no atomicity:
+
+```js
+const remaining = twoFactor.consumeBackupCode(user.twoFactorBackupCodes, code);
+if (remaining) {
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { twoFactorBackupCodes: remaining },
+  });
+```
+
+`user` was loaded earlier in the request. Two failure modes:
+
+1. **Same code, concurrently.** Both requests read an array still containing the code,
+   both match, both issue a session. A "one-time" code is redeemed twice.
+2. **Different codes, concurrently.** Both read the same original array; the later
+   write wins and **restores the code the other request just consumed**.
+
+This is the same shape as the previously fixed habit check-in race (BUG-15 in the
+prior audit), which was resolved with a conditional write.
+
+### Remediation
+
+Make the write conditional on the code still being present, and treat "no row updated"
+as a failed attempt.
+
+**`server/controllers/auth.controller.js`** — replace the backup-code branch:
+
+```js
+  const remaining = twoFactor.consumeBackupCode(user.twoFactorBackupCodes, code);
+  if (remaining) {
+    // Conditional write: only consume if the code is still unused. A concurrent
+    // request that already consumed it leaves count === 0, so this attempt fails
+    // rather than redeeming a one-time code twice.
+    const { count } = await prisma.user.updateMany({
+      where: { id: user.id, twoFactorBackupCodes: { has: twoFactor.hashCode(code) } },
+      data: { twoFactorBackupCodes: remaining },
+    });
+    if (count === 1) {
+      tfaReset(user.id);
+      const updated = await prisma.user.findUnique({ where: { id: user.id } });
+      return res.json({ user: serializeUser(updated), token: issueToken(updated) });
+    }
+  }
+  tfaRecordFailure(user.id);
+  throw ApiError.unauthorized('That code is incorrect.');
+```
+
+`has` is Prisma's scalar-list containment filter and maps to a single guarded `UPDATE`,
+so the check and the write happen in one statement. `twoFactor.hashCode` is already
+exported.
+
+Apply the same conditional-write shape to `disableTwoFactor` (`auth.controller.js:338`),
+which consumes a backup code through the same unguarded path.
+
+**Note:** `fakePrisma` will need `updateMany` support for `{ has: ... }` on a scalar
+list to test this — check `server/tests/helpers/fakePrisma.js` before starting.
+
+**Difficulty:** 🟡 Moderate (~1 h, mostly test-harness work).
+
+---
+
+<a id="bug-08"></a>
+## BUG-08 — 🟡 Low — `secretCrypto.decrypt` throws on a rotated key, surfacing as a 500
+
+**File:** `server/services/secretCrypto.js:26-33` · callers at `auth.controller.js:311,338,382`
+
+### Root cause
+
+The TOTP secret is encrypted with a key derived from `TWO_FACTOR_ENC_KEY` **or, by
+default, `JWT_SECRET`**:
+
+```js
+const material = process.env.TWO_FACTOR_ENC_KEY || config.jwt.secret;
+```
+
+`decrypt` has no error handling — an AES-GCM auth-tag mismatch throws out of
+`decipher.final()`. Every caller invokes it inline inside an expression:
+
+```js
+if (totp.verify(secretCrypto.decrypt(user.twoFactorSecret), code)) {
+```
+
+So rotating `JWT_SECRET` — a routine, well-intentioned security action, and the exact
+thing an operator does after a suspected leak — makes every 2FA login return **500
+Internal Server Error** instead of a comprehensible failure. The user is locked out
+with no signal about what went wrong, and the logs show an opaque crypto error.
+
+Note the coupling is undocumented outside a code comment: nothing warns that
+`JWT_SECRET` rotation destroys stored TOTP secrets.
+
+### Remediation
+
+**`server/services/secretCrypto.js`** — fail closed and legibly:
+
+```js
+// Decrypt a value produced by encrypt(). A value not in the v1 envelope is returned
+// as-is, so a secret written before encryption was added (legacy plaintext) still
+// works. A value that fails to decrypt — almost always because the derived key
+// changed (JWT_SECRET rotated without TWO_FACTOR_ENC_KEY pinned) — returns null so
+// callers surface a clean auth failure instead of a 500.
+function decrypt(payload) {
+  if (typeof payload !== 'string' || !payload.startsWith(`${PREFIX}:`)) return payload;
+  try {
+    const [, ivb, tagb, ctb] = payload.split(':');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key(), Buffer.from(ivb, 'base64'));
+    decipher.setAuthTag(Buffer.from(tagb, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(ctb, 'base64')), decipher.final()]).toString('utf8');
+  } catch {
+    // eslint-disable-next-line no-console
+    console.warn('[secretCrypto] could not decrypt a stored secret — has JWT_SECRET or TWO_FACTOR_ENC_KEY changed?');
+    return null;
+  }
+}
+```
+
+`totp.verify(null, code)` already returns `false` (its first guard is `if (!secretBase32
+|| !code) return false`), so all three call sites degrade to a clean
+`401 That code is incorrect.` with no further change.
+
+**Also document the coupling** — add to `.env.docker.example` and the ops notes in
+`ROADMAP.md`:
+
+> `TWO_FACTOR_ENC_KEY` — optional. If unset, the TOTP-secret encryption key is derived
+> from `JWT_SECRET`, so **rotating `JWT_SECRET` invalidates every stored 2FA secret**
+> and enrolled users must re-enrol. Set `TWO_FACTOR_ENC_KEY` explicitly to decouple them.
+
+**Difficulty:** 🟢 Easy (~30 min).
+
+---
+
+<a id="bug-09"></a>
+## BUG-09 — 🟡 Low — reminder mark-sent is not atomic across instances
+
+**File:** `server/services/reminderScheduler.js:47`
+
+### Root cause
+
+The scheduler reads due rows, then marks each sent by primary key:
+
+```js
+due = await prisma.reminder.findMany({ where: { sent: false, remindAt: { lte: now } }, take: 100 });
+...
+await prisma.reminder.update({ where: { id: reminder.id }, data: { sent: true } });
+```
+
+The update is unconditional. `guardedTick`'s `running` flag prevents *overlap within one
+process* (the prior audit's BUG-07 fix) but does nothing across processes. If the API is
+ever scaled past one instance — or during a rolling deploy, when old and new instances
+briefly overlap — two schedulers read the same unsent rows and both emit, delivering
+duplicate notifications and creating duplicate `Notification` rows and duplicate chained
+recurrences.
+
+Currently latent: Render runs a single instance. It becomes a live bug the moment the
+service is scaled or a zero-downtime deploy is configured.
+
+### Remediation
+
+**`server/services/reminderScheduler.js:47`** — claim the row with a guarded write and
+skip it if another instance won:
+
+```js
+    // Claim the reminder atomically: the `sent: false` predicate means exactly one
+    // instance can win the row, so scaling past one process (or a rolling deploy)
+    // cannot double-send.
+    let claimed;
+    try {
+      claimed = await prisma.reminder.updateMany({
+        where: { id: reminder.id, sent: false },
+        data: { sent: true },
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[scheduler] mark-sent failed for ${reminder.id}: ${err.message}`);
+      continue;
+    }
+    if (claimed.count === 0) continue; // another instance already took it
+```
+
+Ordering is unchanged — the claim still precedes the emit, preserving the deliberate
+"drop rather than double-send" trade-off documented in the existing comment.
+
+**Difficulty:** 🟢 Easy (~30 min).
+
+---
+
+<a id="bug-10"></a>
+## BUG-10 — 🟡 Low — backup codes are unsalted SHA-256 over a 40-bit secret
+
+**File:** `server/services/twoFactor.js:14,22`
+
+### Root cause
+
+```js
+const raw = crypto.randomBytes(5).toString('hex'); // 10 hex chars → 40 bits
+...
+function hashCode(code) {
+  return crypto.createHash('sha256').update(normalize(code)).digest('hex');
+}
+```
+
+40 bits of entropy behind a single unsalted SHA-256. That is fine against online
+guessing (the `tfaLocked` throttle covers it) but weak against an offline attack: an
+attacker holding a database dump can exhaust the whole 2⁴⁰ keyspace on commodity GPU
+hardware in hours, and because the hash is unsalted, one pass recovers the codes for
+**every user at once**. Each recovered code is a complete second factor.
+
+Consistent with the threat model already accepted elsewhere in the codebase — the TOTP
+secret is encrypted at rest (F2) precisely because a DB leak is in scope — so the
+backup codes should get comparable treatment.
+
+### Remediation
+
+Two independent improvements; the first is the cheap one.
+
+**1. Raise the entropy** — `server/services/twoFactor.js:22`:
+
+```js
+    const raw = crypto.randomBytes(8).toString('hex'); // 16 hex chars → 64 bits
+    plain.push(`${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12)}`);
+```
+
+64 bits puts an offline exhaustive search out of reach. `normalize()` already strips
+hyphens, so the existing comparison path and any codes users have written down in the
+old format continue to work.
+
+**2. Salt the hash.** A per-code random salt stored with the digest
+(`salt:hash`) removes the shared-work advantage. This changes the stored format, so
+`consumeBackupCode` must compare by iterating rather than by `includes`, and existing
+users' codes would need regenerating (or a dual-format read path). Given (1) already
+defeats the practical attack, **recommend (1) alone** unless the user wants the
+stronger guarantee.
+
+Either way, existing enrolled users keep their old 40-bit codes until they regenerate.
+If that matters, add a "regenerate backup codes" prompt for users enrolled before the
+change.
+
+**Difficulty:** 🟢 Easy (~20 min) for (1); 🟡 Moderate (~2 h) for (1)+(2).
+
+---
+
+<a id="bug-11"></a>
+## BUG-11 — 🟡 Low — `emailVerifyTokenHash` lookup is a full table scan
+
+**Files:** `server/services/emailVerification.js:56` · `server/prisma/schema.prisma`
+
+### Root cause
+
+```js
+const user = await prisma.user.findFirst({ where: { emailVerifyTokenHash: hashToken(rawToken) } });
+```
+
+`emailVerifyTokenHash` carries no index (confirmed against every `@@index`/`@@unique`
+in the schema), so each verification click sequentially scans `users`. Harmless at
+current scale, linearly worse as the table grows, and it sits on an unauthenticated,
+publicly reachable endpoint — a cheap way to generate load.
+
+The value is a SHA-256 hex digest of 32 random bytes and is `null` for most rows, so a
+unique index is both correct and cheap (Postgres does not index NULLs in a way that
+would collide).
+
+### Remediation
+
+**`server/prisma/schema.prisma`** — on `model User`:
+
+```prisma
+  @@unique([emailVerifyTokenHash])
+```
+
+Then switch the lookup to the indexed unique path — **`server/services/emailVerification.js:56`**:
+
+```js
+  const user = await prisma.user.findUnique({ where: { emailVerifyTokenHash: hashToken(rawToken) } });
+```
+
+**Deploy note:** applied by `prisma db push`, per the existing convention. Verify no
+duplicate non-null values exist before adding the unique constraint — with a
+32-byte random source a collision is not realistic, but the constraint will refuse to
+build if some other path wrote a duplicate.
+
+**Difficulty:** 🟢 Easy (~20 min).
+
+---
+
+<a id="bug-12"></a>
+## BUG-12 — 🟡 Low — the `notifications` table grows without bound
+
+**Files:** `server/services/reminderScheduler.js:59` · `server/controllers/notification.controller.js:16`
+
+### Root cause
+
+G1 persists a `Notification` row for every reminder that fires, and nothing ever
+deletes them. The read side only *queries* a 30-day window:
+
+```js
+const since = new Date(Date.now() - 30 * DAY);
+```
+
+so rows older than 30 days are permanently unreachable but permanently stored. A user
+with several daily recurring reminders accumulates thousands of dead rows a year,
+inflating the table and its `(userId, createdAt)` index for no benefit. Cascade delete
+on the user relation is the only cleanup that ever happens.
+
+### Remediation
+
+Prune alongside the existing scheduler sweep rather than adding new infrastructure.
+
+**`server/services/reminderScheduler.js`** — add a retention pass and call it from
+`tick()`:
+
+```js
+const RETENTION_DAYS = 90;
+let lastPrune = 0;
+
+// Notifications are only ever read back over a 30-day window (see
+// notification.controller.list), so anything past the retention horizon is dead
+// weight. Pruned at most once an hour, best-effort — never blocks reminder delivery.
+async function pruneNotifications(now) {
+  if (now.getTime() - lastPrune < 60 * 60 * 1000) return;
+  lastPrune = now.getTime();
+  try {
+    await prisma.notification.deleteMany({
+      where: { createdAt: { lt: new Date(now.getTime() - RETENTION_DAYS * 864e5) } },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[scheduler] notification prune failed: ${err.message}`);
+  }
+}
+```
+
+Call it at the end of `tick()`. 90 days is deliberately wider than the 30-day read
+window so the retention change is invisible to users.
+
+**Difficulty:** 🟢 Easy (~30 min).
+
+---
+
+<a id="bug-13"></a>
+## BUG-13 — 🟡 Low — plan caps can be exceeded under concurrency
+
+**File:** `server/services/quota.js:24`
+
+### Root cause
+
+```js
+const used = await prisma[meta.model].count({ where: { userId: user.id } });
+if (used >= cap) { throw ApiError.paymentRequired(...); }
+```
+
+Count and create are separate operations with no transaction or constraint behind them.
+A user at 99/100 tasks who fires several creates concurrently — trivially done by the
+SPA, or deliberately — has every request read `99` and pass the gate, ending above the
+cap.
+
+Low impact: this is a soft commercial limit, not a security boundary, and the overshoot
+is bounded by request concurrency. Listed for completeness.
+
+### Remediation
+
+Accept it, or close it in a transaction. The pragmatic middle ground is to make the
+check strict at the boundary and re-verify after the write, which needs no schema
+change:
+
+```js
+// Soft cap: count-then-create is not atomic, so concurrent creates can overshoot by
+// the request concurrency. Acceptable for a commercial limit; tighten with a
+// transaction if it ever needs to be exact.
+```
+
+Simply documenting the known limitation is a legitimate resolution here — recommend
+that over adding transaction overhead to every task/note create.
+
+**Difficulty:** 🟢 Easy (~10 min to document) / 🟡 Moderate (~2 h to make exact).
+
+---
+
+<a id="bug-14"></a>
+## BUG-14 — 🟡 Low — socket reconnect does not re-run the catch-up fetch
+
+**File:** `client/src/context/NotificationContext.jsx:34-36`
+
+### Root cause
+
+The catch-up fetch runs only when `user` changes:
+
+```js
+useEffect(() => {
+  if (!user) return;
+  load();
+}, [user, load]);
+```
+
+Reminders that fire while the socket is down are persisted server-side, but the client
+only learns about them on a full remount. Socket.IO reconnects automatically after a
+network blip, laptop sleep, or a server restart — and on reconnect the bell silently
+stays stale until the user reloads the page. This partially undermines the offline
+catch-up G1 was built to provide.
+
+### Remediation
+
+**`client/src/context/NotificationContext.jsx`** — re-run catch-up whenever the socket
+(re)connects, and add `load` to the effect's dependencies:
+
+```js
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket', 'polling'] });
+
+    // Anything that fired while the socket was down was persisted but not pushed.
+    // Re-run catch-up on every (re)connect, not just on mount.
+    socket.on('connect', () => { load(); });
+
+    socket.on('reminder', (payload) => { /* unchanged */ });
+
+    return () => socket.disconnect();
+  }, [user, load]);
+```
+
+`load` is already wrapped in `useCallback` with a stable `[]` dependency list, so adding
+it does not re-create the socket. The existing de-dupe inside the `reminder` handler
+(`prev.some((n) => n.id === payload.id)`) already prevents doubles, and `load` replaces
+state wholesale, so no extra guard is needed.
+
+**Difficulty:** 🟢 Easy (~20 min).
+
+---
+
+<a id="bug-15"></a>
+## BUG-15 — ⚪ Trivial — dead notification code
+
+**Files:** `client/src/context/NotificationContext.jsx:70` · `server/routes/notification.routes.js:15`
+
+### Root cause
+
+Two loose ends from G1:
+
+1. `clear()` is created and exposed on the context but no component consumes it
+   (`Layout.jsx` destructures only `notifications`, `unread`, `markAllRead`). It is also
+   local-only — it never calls the server, so anything it cleared would reappear on the
+   next `load()`. Shipping it as-is would be a visible bug; right now it is merely dead.
+2. `PATCH /api/notifications/:id/read` and its `markRead` controller are implemented and
+   tested but never called by the client, which only ever uses `markAllRead`.
+
+Neither is a defect today. Both are latent traps: the next person to wire `clear()` into
+a button inherits a bug that looks like a backend failure.
+
+### Remediation
+
+Either delete `clear` from the context, or make it real by adding a server-side clear.
+If it is being kept for imminent use, mark the gap explicitly:
+
+```js
+  // NOTE: local-only — does not clear server-side, so cleared items return on the
+  // next load(). Add a DELETE /notifications endpoint before wiring this to any UI.
+  const clear = useCallback(() => setNotifications([]), []);
+```
+
+Leave the `markRead` endpoint in place — per-item read is the obvious next UI increment
+and it is already tested.
+
+**Difficulty:** 🟢 Easy (~10 min).
+
+---
+
+## Proposed slices
+
+Ordered by severity, grouped so each slice is independently shippable with its own tests.
+
+| # | Slice | Items | Difficulty |
 | --- | --- | --- | --- |
-| 1 | Security | BUG-01, 02, 16, 17 | `173f14f` |
-| 2 | Google Calendar sync | BUG-03, 05, 04 | `3cc83ac` |
-| 3 | Schedulers & background work | BUG-06, 07, 18, 20 | `07971fe` |
-| 4 | Cost & performance | BUG-08, 11, 21, 24 | `c867fa8` |
-| 5 | Client correctness | BUG-09, 10, 23, 19 | `ec7ca68` |
-| 6 | Search polish | BUG-13, 14, 15, 22 | `6e67cca` |
-| 7 | Dependency upgrade | BUG-12 | `4a28cbd` |
+| 1 | **Auth bypass — ship first, alone** | BUG-01 | 🟢 Easy |
+| 2 | Billing authorization | BUG-02 | 🟢 Easy |
+| 3 | Green the suite | BUG-03 | 🟢 Easy |
+| 4 | Rate-limiter correctness | BUG-04, BUG-05 | 🟡 Moderate |
+| 5 | 2FA hardening | BUG-06, BUG-07, BUG-08, BUG-10 | 🟡 Moderate |
+| 6 | Scheduler + storage | BUG-09, BUG-11, BUG-12 | 🟢 Easy |
+| 7 | Client + cleanup | BUG-13, BUG-14, BUG-15 | 🟢 Easy |
+
+Slice 1 is deliberately isolated: it is a live authentication bypass and should go out
+on its own, without waiting on anything else in this plan.
+
+Slices 5 and 6 add schema fields (`twoFactorLastStep`, `@@unique` on
+`emailVerifyTokenHash`). Render applies these via `prisma db push` per the standing
+convention in `ROADMAP.md` — no migration files.
 
 ## Verification
 
-Run after every slice; all green at `4a28cbd`:
+Run after every slice:
 
 ```bash
-cd server     && npm run lint && npm test          # 23 suites, 187 tests
-cd client     && npm run lint && npm test && npm run build   # 17 files, 40 tests
-cd ai-service && .venv/bin/python -m pytest        # 35 tests
+cd server     && npm run lint && npm test                     # 32 suites, 251 tests
+cd client     && npm run lint && npm test && npm run build     # 24 files, 60 tests
+cd ai-service && .venv/bin/python -m pytest                    # 38 tests
 ```
 
-Beyond the suites, these fixes were verified by direct observation rather than by
-test assertion alone:
+Note the venv path differs from `CLAUDE.md`, which documents the Windows
+`.venv/Scripts/python`; on Linux it is `.venv/bin/python`.
 
-- **BUG-20** — sent a real `SIGTERM` to a running server: logged the graceful path
-  and exited 0, without hitting the 10s force-exit fallback.
-- **BUG-19** — inspected `dist/sw.js` after a build; `__BUILD_ID__` is substituted.
-- **BUG-22** — the new test fails against the pre-fix `main.py` and passes after.
-- **BUG-12** — dev server booted on Vite 8 and served HTTP 200.
-- **Schema** — `prisma validate` passes; `prisma generate` succeeds.
-
-> **Note on `ai-service`:** the plan recorded its findings as code-reading only,
-> because no `.venv` existed. The environment has since been created
-> (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`) and the suite
-> runs clean. Note the command differs from `CLAUDE.md`, which documents the Windows
-> path `.venv/Scripts/python`; on Linux it is `.venv/bin/python`.
+BUG-01 and BUG-02 should additionally be confirmed by the exploit reproductions given in
+their sections failing to reproduce after the fix — not by the unit tests alone.
 
 ---
 
-## Status: complete
+## Status: awaiting approval
 
-All 24 items implemented, tested, and committed on `claude/beautiful-einstein-r9hm2f`.
-Every suite green, all lint clean, 0 npm vulnerabilities in both packages.
-
-The one thing needing a human decision is the **deploy**: the Prisma schema gained
-`Schedule.allDay` and three composite indexes, which Render applies via
-`prisma db push` on the next deploy.
+15 items identified; **0 implemented**. No source file has been modified by this audit.
+Reply with which slices to proceed with.
